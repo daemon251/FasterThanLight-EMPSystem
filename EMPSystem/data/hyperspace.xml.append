@@ -1,0 +1,94 @@
+<FTL>
+ 
+<version>^1.20.0</version>
+
+<defaults>
+	
+</defaults>
+
+<!--<customSystems>
+    <customSystem id="empgenerator"/>
+
+	<exclusivityGroup>
+		<empgenerator/>
+		<mind/>
+	</exclusivityGroup>
+
+</customSystems>-->
+
+<mod:findLike type="ships" limit="1">
+
+	<mod-append:ship name="PLAYER_SHIP_EMPGENERATOR" b="true" c="true" secret="false">
+
+	</mod-append:ship>
+
+	<mod:findLike type="shipOrder" limit="1">
+        <mod-append:ship>PLAYER_SHIP_EMPGENERATOR</mod-append:ship>
+	</mod:findLike>
+
+</mod:findLike>
+
+<mod:findLike type="customSystems">
+	<mod-append:customSystem id="empgenerator"/>
+
+	<!--<mod:findWithChildLike type="exclusivityGroup" child-type="mind">
+		<mod-append:empgenerator/>
+	</mod-append:exclusivityGroup>-->
+		
+</mod:findLike>
+
+<mod:findLike type="events">
+
+	<mod-append:event name="EMP_HOTKEY_RELOAD">
+		<loadEvent>EMP_CONFIG</loadEvent>
+	</mod-append:event>
+
+	<mod-append:metaVariable name="EMPPowerKey" op="set" val="0"/>
+	<mod-append:metaVariable name="EMPInverseKey" op="set" val="304"/>
+	<mod-append:metaVariable name="EMPAimEMPKey" op="set" val="0"/>
+	<mod-append:metaVariable name="EMPIncreaseChargeKey" op="set" val="0"/>
+	<mod-append:metaVariable name="EMPDecreaseChargeKey" op="set" val="0"/>
+		
+	<mod-append:metaVariable name="playerEMPHackFiredOnce" op="set" val="0"/>
+	<mod-append:metaVariable name="enemyEMPHackFiredOnce" op="set" val="0"/>	
+	
+	<mod-append:eventButton name="EMP_CONFIG_BUTTON">
+		<event load="EMP_CONFIG"/>                                                              --Name of an event to queue when clicked. Either load an event or define an event.
+		<image border="12">img_path</image>                                                     --Path to button asset without extension. For text buttons this is the background.
+		<text>EMP CONFIG</text>                                                --For a text button, text or text id. Omit for an image-only button.
+		<location>0</location>                                                                  --Location ID: 0 = below upgrades, 1/2/3/4 = right of FTL/upgrades/store/options button
+		<!--<customLocation x="0" y="0"/>                                                    -->--Override location ID with fixed location on the screen.
+		<tooltip>EMP CONFIG</tooltip>                                                        --Hover tooltip when active.
+		<!--<inactiveTooltip id="_id_">_text_</text>                                         -->--Hover tooltip when inactive.
+		<!--<req lvl="1" max_lvl="2147483647">reqName</req>                                  -->--Disables and enables the button dynamically based on player equipment.
+		<color r="235" g="245" b="229"/>                                                        --Color for text button when active.
+		<activeColor r="235" g="245" b="229"/>                                                  --Color for text button when active.
+		<inactiveColor r="164" g="171" b="160"/>                                                --Color for text button when inactive.
+		<selectedColor r="255" g="230" b="94"/>                                                 --Color for text button when selected.
+		<textColor r="25" g="49" b="51"/>                                                       --Color for text inside text button.
+		<jumpClear>false</jumpClear>                                                            --Remove this button when the player leaves the current location.
+		<once>false</once>                                                                      --Remove this button after the player clicks on it.
+		<noDanger>false</noDanger>                                                              --Deactivate this button when the player is in danger (same as upgrade button).
+		<hideInactive>false</hideInactive>                                                      --Hide this button when inactive (similar to store button).
+	</mod-append:eventButton>
+	
+</mod:findLike>
+
+<!-- Scripts
+
+Load scripts (Lua files) see online documentation & examples (and lua files included in hyperspace.ftl) on how to use the interface
+Other mods must append to this list as only one `<scripts>` is allowed but multiple `<script>` entries are allowed.
+Load order is the order it appears in the XML here.
+Internal hyperspace scripts & modules are loaded before any of these
+
+Note: it is recommended you make a folder like `data/scripts/` or `scripts/` but there is no actual restriction on a prefix.
+-->
+
+<mod:findLike type="scripts" limit="1">
+	<mod-append:script>data/scripts/empgenerator_system.lua</mod-append:script>
+	<mod-append:script>data/scripts/emp_hotkey_rebind_jtq.lua</mod-append:script>
+</mod:findLike>
+
+<console enabled="true"/> 
+
+</FTL>

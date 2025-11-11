@@ -1,0 +1,170 @@
+<FTL>
+
+<ship name="EMP_GENERATOR_TEST_SHIP" auto_blueprint="EMP_GENERATOR_TEST">
+	<destroyed load="DESTROYED_DEFAULT"/>
+	<deadCrew load="DEAD_CREW_DEFAULT"/>
+</ship>
+
+<event name="EMPGEN_TEST">
+	<text>abcdefghijklmnopqrstuvwxyz</text>
+	<ship load="EMP_GENERATOR_TEST_SHIP" hostile="true"/>
+</event>
+
+<!--modified from ins+ -->
+<event name="EMP_CONFIG">
+	<text>EMP System Config:</text>
+	<choice hidden="true"> <!-- power key -->
+		<text>EMP_POWERKEY</text>
+		<event name="EMP_POWERKEY_CONFIG_START">
+            <text>Press a key and then select "Confirm" to set a new keybind.</text>
+            <choice hidden="true">
+                <text>Confirm.</text>
+                <event name="EMP_POWERKEY_CONFIG_END_1">
+                    <loadEvent>EMP_HOTKEY_RELOAD</loadEvent>
+                </event>
+            </choice>
+            <choice hidden="true">
+                <text>Delete Bind.</text>
+                <event name="EMP_POWERKEY_CONFIG_END_2">
+                    <metaVariable name="EMPPowerKey" op="set" val="0"/>
+                    <loadEvent>EMP_HOTKEY_RELOAD</loadEvent>
+                </event>
+            </choice>
+            <choice hidden="true">
+                <text>Cancel.</text>
+                <event>
+                    <loadEvent>EMP_HOTKEY_RELOAD</loadEvent>
+                </event>
+            </choice>
+        </event>
+	</choice>
+	<choice hidden="true"> <!-- inverse power key -->
+		<text>EMP_INVERSEPOWERKEY</text>
+		<event name="EMP_INVERSEPOWERKEY_CONFIG_START">
+            <text>Press a key and then select "Confirm" to set a new keybind.</text>
+            <choice hidden="true">
+                <text>Confirm.</text>
+                <event name="EMP_INVERSEPOWERKEY_CONFIG_END_1">
+                    <loadEvent>EMP_HOTKEY_RELOAD</loadEvent>
+                </event>
+            </choice>
+            <choice hidden="true">
+                <text>Delete Bind.</text>
+                <event name="EMP_INVERSEPOWERKEY_CONFIG_END_2">
+                    <metaVariable name="EMPInverseKey" op="set" val="0"/>
+                    <loadEvent>EMP_HOTKEY_RELOAD</loadEvent>
+                </event>
+            </choice>
+            <choice hidden="true">
+                <text>Cancel.</text>
+                <event>
+                    <loadEvent>EMP_HOTKEY_RELOAD</loadEvent>
+                </event>
+            </choice>
+        </event>
+	</choice>
+	<choice hidden="true"> <!-- increase charge key -->
+		<text>EMP_INCREASECHARGEKEY</text>
+		<event name="EMP_INCREASECHARGEKEY_CONFIG_START">
+            <text>Press a key and then select "Confirm" to set a new keybind.</text>
+            <choice hidden="true">
+                <text>Confirm.</text>
+                <event name="EMP_INCREASECHARGEKEY_CONFIG_END_1">
+                    <loadEvent>EMP_HOTKEY_RELOAD</loadEvent>
+                </event>
+            </choice>
+            <choice hidden="true">
+                <text>Delete Bind.</text>
+                <event name="EMP_INCREASECHARGEKEY_CONFIG_END_2">
+                    <metaVariable name="EMPIncreaseChargeKey" op="set" val="0"/>
+                    <loadEvent>EMP_HOTKEY_RELOAD</loadEvent>
+                </event>
+            </choice>
+            <choice hidden="true">
+                <text>Cancel.</text>
+                <event>
+                    <loadEvent>EMP_HOTKEY_RELOAD</loadEvent>
+                </event>
+            </choice>
+        </event>
+	</choice>
+	<choice hidden="true"> <!-- decrease charge key -->
+		<text>EMP_DECREASEECHARGEKEY</text>
+		<event name="EMP_DECREASECHARGEKEY_CONFIG_START">
+            <text>Press a key and then select "Confirm" to set a new keybind.</text>
+            <choice hidden="true">
+                <text>Confirm.</text>
+                <event name="EMP_DECREASECHARGEKEY_CONFIG_END_1">
+                    <loadEvent>EMP_HOTKEY_RELOAD</loadEvent>
+                </event>
+            </choice>
+            <choice hidden="true">
+                <text>Delete Bind.</text>
+                <event name="EMP_DECREASECHARGEKEY_CONFIG_END_2">
+                    <metaVariable name="EMPDecreaseChargeKey" op="set" val="0"/>
+                    <loadEvent>EMP_HOTKEY_RELOAD</loadEvent>
+                </event>
+            </choice>
+            <choice hidden="true">
+                <text>Cancel.</text>
+                <event>
+                    <loadEvent>EMP_HOTKEY_RELOAD</loadEvent>
+                </event>
+            </choice>
+        </event>
+	</choice>
+	<choice hidden="true"> <!-- aim key -->
+		<text>EMP_AIMKEY</text>
+		<event name="EMP_AIMKEY_CONFIG_START">
+            <text>Press a key and then select "Confirm" to set a new keybind.</text>
+            <choice hidden="true">
+                <text>Confirm.</text>
+                <event name="EMP_AIMKEY_CONFIG_END_1">
+                    <loadEvent>EMP_HOTKEY_RELOAD</loadEvent>
+                </event>
+            </choice>
+            <choice hidden="true">
+                <text>Delete Bind.</text>
+                <event name="EMP_AIMKEY_CONFIG_END_2">
+                    <metaVariable name="EMPAimEMPKey" op="set" val="0"/>
+                    <loadEvent>EMP_HOTKEY_RELOAD</loadEvent>
+                </event>
+            </choice>
+            <choice hidden="true">
+                <text>Cancel.</text>
+                <event>
+                    <loadEvent>EMP_HOTKEY_RELOAD</loadEvent>
+                </event>
+            </choice>
+        </event>
+	</choice>
+	<choice hidden="true"> <!-- leave -->
+		<text>Return.</text>
+		<event/>
+	</choice>
+</event>
+
+<event name="EMP_HOTKEY_RELOAD">
+	<text>a.</text> <!-- never seen -->
+	<event/>
+</event>
+
+<event name="ADD_EMP_CONFIG_BUTTON">
+	<eventButton name="EMP_CONFIG_BUTTON">
+        <event load="EMP_CONFIG"/>
+        <image border="12">statusUI/top_blank_on</image>
+		<text border="3">EMP</text>
+        <location>2</location>
+        <tooltip>Access the EMP System Config.</tooltip>
+        <inactiveTooltip>Text.</inactiveTooltip>
+        <!--<color r="255" g="255" b="255"/>
+        <activeColor r="255" g="255" b="255"/>
+        <inactiveColor r="160" g="162" b="171"/>
+        <selectedColor r="58" g="127" b="255"/>
+        <textColor r="23" g="44" b="62"/>-->
+        <jumpClear>false</jumpClear>
+        <noDanger>false</noDanger>
+    </eventButton>
+</event>
+
+</FTL>

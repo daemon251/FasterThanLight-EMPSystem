@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<FTL>
+
+<animSheet name="empgenerator_system_effect" w="2560" h="256" fw="256" fh="256">effects/empgenerator_system_effect.png</animSheet>
+
+<anim name="empgenerator_system_effect">
+	<sheet>empgenerator_system_effect</sheet>
+	<desc length="10" x="0" y="0" />
+	<time>0.4</time>
+</anim>
+
+</FTL>
