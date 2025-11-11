@@ -14,5 +14,5 @@ You can make the system take the same slot as another one, such as mind control 
 This mod directly supports Vanilla Hyperspace, INS+ and Multiverse. The system might not show up in shops with other mods.
 
 Adding support for specific mods is often not very difficult to do, so report any issues you have with any mods.
-Reporting any issue is best done by raising an issue on this github page. You can alternatively message me on discord, #daemon8363. I will not respond to posts on the forum in a timely manner, so please don't post anything important there.
+Reporting any issue is best done by raising an issue on this github page. You can alternatively message me on discord, #daemon8363. I will not respond to posts on the FTL forum in a timely manner, so please don't post anything important there.
 Feel free to use this system, any code, or any idea in any of your mods if you want.
