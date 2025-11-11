@@ -1,5 +1,7 @@
 Patch this mod near the bottom.
 
+FTL Forum Post: https://subsetgames.com/forum/viewtopic.php?t=42497
+
 Adds a system to the game: the EMP Generator, which
 creates an EMP at cursor location, destroying projectiles, stunning drones and crew, and forcefully opening doors within its radius. 
 Base cooldown of 20s, base diameter of 96px, base cost of 100 scrap.
