@@ -1,3 +1,5 @@
+![EMPSystem0](https://raw.githubusercontent.com/daemon251/FasterThanLight-EMPSystem/refs/heads/main/release/gifFinal.gif)
+
 Patch this mod near the bottom.
 
 Adds a system to the game: the EMP Generator, which
