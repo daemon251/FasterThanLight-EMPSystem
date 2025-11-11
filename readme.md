@@ -1,5 +1,3 @@
-![EMPSystem0](https://raw.githubusercontent.com/daemon251/FasterThanLight-EMPSystem/refs/heads/main/release/gifFinal.gif)
-
 Patch this mod near the bottom.
 
 Adds a system to the game: the EMP Generator, which
@@ -18,3 +16,9 @@ This mod directly supports Vanilla Hyperspace, INS+ and Multiverse. The system m
 Adding support for specific mods is often not very difficult to do, so report any issues you have with any mods.
 Reporting any issue is best done by raising an issue on this github page. You can alternatively message me on discord, #daemon8363. I will not respond to posts on the FTL forum in a timely manner, so please don't post anything important there.
 Feel free to use this system, any code, or any idea in any of your mods if you want.
+
+![EMPSystem0](https://raw.githubusercontent.com/daemon251/FasterThanLight-EMPSystem/refs/heads/main/release/final0.gif)
+
+![EMPSystem1](https://raw.githubusercontent.com/daemon251/FasterThanLight-EMPSystem/refs/heads/main/release/final1.gif)
+
+![EMPSystem2](https://raw.githubusercontent.com/daemon251/FasterThanLight-EMPSystem/refs/heads/main/release/final2.gif)
