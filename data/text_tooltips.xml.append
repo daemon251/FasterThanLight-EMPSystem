@@ -1,0 +1,5 @@
+<text name="tooltip_empgenerator">EMP Generator: Creates an EMP at a location, destroying projectiles, stunning drones and crew, and forcefully opening doors within its radius. Base cooldown of 20s, base diameter of 96px.</text>
+<text name="tooltip_empgenerator_enemy">EMP Generator: Creates an EMP at a location, destroying projectiles, stunning drones and crew, and forcefully opening doors within its radius. Base cooldown of 20s, base diameter of 96px.</text>
+
+<text name="hack_empgenerator">Uses the EMP Generator for the benefit of the ship hacking it.</text>
+
