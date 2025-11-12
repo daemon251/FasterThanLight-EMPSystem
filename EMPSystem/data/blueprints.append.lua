@@ -1,3 +1,4 @@
+---@diagnostic disable: unused-function
 
 --Code made by Arc
 
@@ -29,6 +30,26 @@ local function noDoorOverlapDebug(rT, rB, rL, rR, iT, iB, iL, iR, shipName)
     print("Out:", roomNumber & imageNumber == 0)
     return roomNumber & imageNumber == 0
 end
+
+--[[local function changeAugmentRarity(augmentID, newRarity)
+    for blueprint in root:children() do
+        if blueprint.name == "augBlueprint" then
+			print(blueprint.attrs.name)
+			if blueprint.attrs.name == augmentID then
+				print(blueprint.textContent)
+			end
+			local rarity = blueprint.attrs.rarity
+		end
+	end
+end
+
+local function setAugmentRarities()
+	local isMultiverseEnabled = true
+	if isMultiverseEnabled == true then --this becomes an internal upgrade instead
+		changeAugmentRarity("EMPGENERATOR_ION_UPGRADE", 0)
+	end
+end--]]
+
 
 local function runSystemsAppend()
     for blueprint in root:children() do
@@ -340,3 +361,4 @@ systemsToAppend["empgenerator"] = {
 }
 
 runSystemsAppend()
+--setAugmentRarities()

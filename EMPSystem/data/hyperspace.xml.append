@@ -2,20 +2,6 @@
  
 <version>^1.20.0</version>
 
-<defaults>
-	
-</defaults>
-
-<!--<customSystems>
-    <customSystem id="empgenerator"/>
-
-	<exclusivityGroup>
-		<empgenerator/>
-		<mind/>
-	</exclusivityGroup>
-
-</customSystems>-->
-
 <mod:findLike type="ships" limit="1">
 
 	<mod-append:ship name="PLAYER_SHIP_EMPGENERATOR" b="true" c="true" secret="false">
@@ -51,6 +37,7 @@
 		
 	<mod-append:metaVariable name="playerEMPHackFiredOnce" op="set" val="0"/>
 	<mod-append:metaVariable name="enemyEMPHackFiredOnce" op="set" val="0"/>	
+	<mod-append:metaVariable name="EMPButtonAlreadyAdded" op="set" val="0"/>
 	
 	<mod-append:eventButton name="EMP_CONFIG_BUTTON">
 		<event load="EMP_CONFIG"/>                                                              --Name of an event to queue when clicked. Either load an event or define an event.
@@ -74,22 +61,10 @@
 	
 </mod:findLike>
 
-<!-- Scripts
-
-Load scripts (Lua files) see online documentation & examples (and lua files included in hyperspace.ftl) on how to use the interface
-Other mods must append to this list as only one `<scripts>` is allowed but multiple `<script>` entries are allowed.
-Load order is the order it appears in the XML here.
-Internal hyperspace scripts & modules are loaded before any of these
-
-Note: it is recommended you make a folder like `data/scripts/` or `scripts/` but there is no actual restriction on a prefix.
--->
-
 <mod:findLike type="scripts" limit="1">
 	<mod-append:script>data/scripts/empgenerator_system.lua</mod-append:script>
 	<mod-append:script>data/scripts/empgenerator_hotkey_rebind_jtq.lua</mod-append:script>
+	<mod-append:script>data/scripts/empgenerator_blueoptions_namer.lua</mod-append:script>
 </mod:findLike>
 
-<console enabled="true"/> 
-
 </FTL>
-

@@ -14,6 +14,35 @@
     <mod-append:name>empgenerator</mod-append:name>
 </mod:findName>
 
+<!-- add blue options for EMP... names fixed in empgenerator_blueoptions_namer.lua-->
+<!-- will this cause issues?-->
+
+<!-- vanilla -->
+<mod:findName type="blueprintList" name="DRONES_DEFENSE_LIST">
+    <mod-append:name>empgenerator</mod-append:name>
+</mod:findName>
+
+<mod:findName type="blueprintList" name="WEAPONS_ION">
+    <mod-append:name>empgenerator</mod-append:name>
+</mod:findName>
+
+<!-- ins+ -->
+<mod:findName type="blueprintList" name="MULTIREQ_DRONES_DEFENSE_EVENT">
+    <mod-append:name>empgenerator</mod-append:name>
+</mod:findName>
+
+<!-- mv -->
+<mod:findName type="blueprintList" name="BLUELIST_DRONES_DEFENSE">
+    <mod-append:name>empgenerator</mod-append:name>
+</mod:findName>
+
+<mod:findName type="blueprintList" name="BLUELIST_ION">
+    <mod-append:name>empgenerator</mod-append:name>
+</mod:findName>
+
+
+
+
 
 <shipBlueprint name="EMP_GENERATOR_TEST" layout="rebel_squat_pirate" img="rebel_squat_pirate">  
 	<class id="EMP_GENERATOR_TEST"/>

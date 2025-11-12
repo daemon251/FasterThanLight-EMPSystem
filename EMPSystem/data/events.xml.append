@@ -152,7 +152,7 @@
 <event name="ADD_EMP_CONFIG_BUTTON">
 	<eventButton name="EMP_CONFIG_BUTTON">
         <event load="EMP_CONFIG"/>
-        <image border="12">statusUI/top_blank_on</image>
+        <image border="12">statusUI/emp_top_blank_on</image>
 		<text border="3">EMP</text>
         <location>2</location>
         <tooltip>Access the EMP System Config.</tooltip>

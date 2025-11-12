@@ -1,3 +1,4 @@
+---@diagnostic disable: unused-function
 
 --Code made by Arc
 
