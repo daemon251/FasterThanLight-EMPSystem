@@ -316,7 +316,7 @@ systemsToAppend = {}
 systemsToAppend["empgenerator"] = {
     attributes = { power = 1, start = "false" },
     manning = false,
-    --replace_sys = "temporal",
+    --replace_sys = "mind",
 	--adapated from one of lily's systems that does this kinda thing
     image_list = { 
         { room_image = "room_empgenerator_18", w = 2, h = 2, top = "11", bottom = "11", left="00", right="10", manning_slot = 3, manning_direction = "down"},

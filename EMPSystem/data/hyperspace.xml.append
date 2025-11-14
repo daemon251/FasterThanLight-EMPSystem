@@ -16,10 +16,10 @@
 
 <mod:findLike type="customSystems">
 	<mod-append:customSystem id="empgenerator"/>
-
+	
 	<!--<mod:findWithChildLike type="exclusivityGroup" child-type="mind">
 		<mod-append:empgenerator/>
-	</mod-append:exclusivityGroup>-->
+	</mod:findWithChildLike>-->
 		
 </mod:findLike>
 
@@ -65,6 +65,8 @@
 	<mod-append:script>data/scripts/empgenerator_system.lua</mod-append:script>
 	<mod-append:script>data/scripts/empgenerator_hotkey_rebind_jtq.lua</mod-append:script>
 	<mod-append:script>data/scripts/empgenerator_blueoptions_namer.lua</mod-append:script>
+	
+	<!--<mod-append:script>data/scripts/empgenerator_system_overwrite.lua</mod-append:script>-->
 </mod:findLike>
 
 </FTL>

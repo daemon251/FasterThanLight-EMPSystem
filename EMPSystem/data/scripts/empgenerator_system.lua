@@ -1,8 +1,6 @@
 --todo
 
 --various save load glitches
---put global vars all in one place
---door emp preview placement .. fixed?
 --doors weird ... fixed?
 --change cursor
 
@@ -22,33 +20,93 @@
 --1.1.2
 --hacking drone mid pulse .. drone destroyed.. should be good
 
+--1.2.0
+--mods.EMPGenerator.systemId is now set on game start instead of first time EMP system appears
+--EMP vfx used a lower-resolution file, hardly makes a difference though because only anisotropic filtering was applied to the image
+--changed the way the EMP slider works, works similar to before but now on linear scale 
+--fixed EMP button being needlessly added again after save-quit loading, for real this time.
+--Can now right click the slider to set it to 50%
+--Fixed some behavior of when the system is not powered
+--Mouse cursor now changes when aimed
+--system image now reacts to system power being changed by bind 
+--fixed lanius ships in vanilla from not being able to install the system, because for some reason AE's ship blueprints are split into two files for some reason
+--fixed the empgen B variant ship from crashing the game if stealth_3.txt was not given an extra room by another mod (it now works in MV and vanilla)
+
+--fix dragging thing
+--aiming EMP only does EMP
+--tooltip .. should be fixed?
+--super shields .. fixed?
+--on jump clear .. already fixed?
+--battery / zoltan power .. fixed?
 
 --CONFIG
 mods.EMPGenerator = {}
 
-mods.EMPGenerator.BaseDiameter = 96 --px
-mods.EMPGenerator.BaseCooldown = 20 --seconds
-mods.EMPGenerator.LevelPerformances = {1.00, 1.25, 1.50, 1.75}
+--mods.EMPGenerator.LevelPerformances = {1.00, 1.25, 1.50, 1.75} --no longer used
+mods.EMPGenerator.systemStats = {	[1] = {minCD = 15, maxCD = 25, minDiameter = 48, maxDiameter = 144 * 1.00},
+									[2] = {minCD = 12, maxCD = 25, minDiameter = 48, maxDiameter = 144 * 1.25},
+									[3] = {minCD = 10, maxCD = 25, minDiameter = 48, maxDiameter = 144 * 1.50},
+									[4] = {minCD = 8 , maxCD = 25, minDiameter = 48, maxDiameter = 144 * 1.75}}
+
 --level cost determined in blueprints
 
 --these values can be changed by other mods whenever (make sure to do this after it is done by this mod though)
 mods.EMPGenerator.CutoffXNormal = 882 --VANILLA setting, changed later if needed 
 mods.EMPGenerator.CutoffXBoss = 756 --VANILLA setting, changed later if needed
 
-mods.EMPGenerator.systemId = nil --set later, can be used as shorthand. you should only EVER read this value from outside this file.
+mods.EMPGenerator.systemId = Hyperspace.ShipSystem.NameToSystemId("empgenerator")  
 
 mods.EMPGenerator.CutoffX = -1 --leftmost x cord of enemy box, set later on tick. Don't write to this from outside this file.
 mods.EMPGenerator.BarChargeSetting = 0.5 -- 0 to 1
 local InCombat = false
 local OSClockLastTick = 0 --used to get DeltaTime, since I dont think there is a native function for that (at least accessible through lua)
 
+function mods.EMPGenerator.GetRealTimeSinceLastIteration()
+	local value = (os.clock() - OSClockLastTick)
+	return value
+end
+
 function mods.EMPGenerator.GetGameTimeSinceLastIteration()
 	if Hyperspace.Global.GetInstance():GetCApp().world.space.gamePaused == false then
-		--return (Hyperspace.FPS.SpeedFactor / 0.111) * (os.clock() - OSClockLastTick) --wtf
 		return Hyperspace.FPS.SpeedFactor / 16
 	else
 		return 0
 	end
+end
+
+function mods.EMPGenerator.ClearSelections()
+	--clears all crew from being selected, etc
+	local crewControl = Hyperspace.Global.GetInstance():GetCApp().gui.crewControl
+	crewControl.selectedCrew:clear()
+	crewControl.potentialSelectedCrew:clear()
+end
+
+--world point
+function mods.EMPGenerator.pointInShield(targetShip, point) --targetship is Int
+	if Hyperspace.Global.GetInstance():GetShipManager(targetShip).shieldSystem.shields.power.first < 1 and Hyperspace.Global.GetInstance():GetShipManager(targetShip).shieldSystem.shields.power.super.first < 1 then return false end
+	local shipManager = Hyperspace.Global.GetInstance():GetShipManager(targetShip)
+	local a = shipManager.shieldSystem.baseShield.a --horizontal
+	local b = shipManager.shieldSystem.baseShield.b --vertical
+	local center = shipManager.shieldSystem.baseShield.center
+	--if (x/a)^2 + (y/b)^2 <= 1, then inside
+	local xRelative = point.x - center.x
+	local yRelative = point.y - center.y
+	local val = (xRelative / a) ^ 2 + (yRelative / b) ^ 2
+	if val > 1 then return false 
+	else return true end
+end
+
+function mods.EMPGenerator.pointInSuperShield(targetShip, point)
+	if mods.EMPGenerator.pointInShield(targetShip, point) == false then return false
+	elseif Hyperspace.Global.GetInstance():GetShipManager(targetShip).shieldSystem.shields.power.super.first > 0 then
+		return true
+	else
+		return false
+	end
+end
+
+function mods.EMPGenerator.GetCurrentSysPower(system)
+	return system.powerState.first + system.iBonusPower + system.iBatteryPower
 end
 
 -- helper method to iterate through cvector
@@ -80,7 +138,6 @@ function mods.EMPGenerator.getOtherSystemInStackedEMPRoom(system)
 end
 
 local ShipLoopActive = false --this is silly
-mods.EMPGenerator.eventButtonAdded = false
 
 script.on_internal_event(Defines.InternalEvents.SHIP_LOOP, function(ship)
 	ShipLoopActive = true --set to false later if needed
@@ -94,7 +151,9 @@ mods.EMPGenerator.IncreaseChargeKeyActive = false
 mods.EMPGenerator.DecreaseChargeKeyActive = false
 mods.EMPGenerator.AimEMPKeyActive = false
 
-mods.EMPGenerator.EMPgenerator_targetting = false --player
+mods.EMPGenerator.EMPGenerator_targetting = false --player
+mods.EMPGenerator.EMPGenerator_targettingBlocked = false --player
+mods.EMPGenerator.EMPGenerator_targettingTargetCount = 0
 
 script.on_internal_event(Defines.InternalEvents.SYSTEM_BOX_KEY_DOWN, function(systemBox, key, shift)
 	if Hyperspace.App.world.bStartedGame and key ~= 0 then 
@@ -105,9 +164,10 @@ script.on_internal_event(Defines.InternalEvents.SYSTEM_BOX_KEY_DOWN, function(sy
 
 		if key == Hyperspace.metaVariables.EMPPowerKey then
 			mods.EMPGenerator.PowerKeyActive = true
+			mods.EMPGenerator.timeEndFlash = 0.150 + os.clock()
 		elseif key == Hyperspace.metaVariables.EMPAimEMPKey then
 			mods.EMPGenerator.AimEMPKeyActive = true
-			if mods.EMPGenerator.EMPgenerator_targetting == true then mods.EMPGenerator.AimEMPKeyActive = false mods.EMPGenerator.EMPgenerator_targetting = false end
+			if mods.EMPGenerator.EMPGenerator_targetting == true then mods.EMPGenerator.AimEMPKeyActive = false mods.EMPGenerator.EMPGenerator_targetting = false end
 		elseif key == Hyperspace.metaVariables.EMPIncreaseChargeKey then
 			mods.EMPGenerator.IncreaseChargeKeyActive = true
 		elseif key == Hyperspace.metaVariables.EMPDecreaseChargeKey then
@@ -135,6 +195,19 @@ script.on_internal_event(Defines.InternalEvents.ON_KEY_UP, function(key)
 	end
 end)
 
+mods.EMPGenerator.timeEndFlash = -1
+
+function mods.EMPGenerator.setSystemSelectionStateLogic(system)
+	--local state = system:GetSelected()
+	if os.clock() < mods.EMPGenerator.timeEndFlash then
+		system:SetSelected(1)
+	end
+
+	--doesnt highlight overlay on system icon in the ship, do it otherwhere
+
+	--mods.EMPGenerator.GetRealTimeSinceLastIteration()
+end
+
 function mods.EMPGenerator.getStunDuration(systemLevel, barcharge, isEnemy)
 	if isEnemy then
 		return 6.5
@@ -143,10 +216,10 @@ function mods.EMPGenerator.getStunDuration(systemLevel, barcharge, isEnemy)
 	end
 end
 
-function mods.EMPGenerator.getCDAndDiameterMult(systemLevel, barcharge)
+function mods.EMPGenerator.getCDAndDiameter(systemLevel, barcharge)
 	local data = {}
-	local performance = 1 
-	if systemLevel > 0 and systemLevel < #mods.EMPGenerator.LevelPerformances + 1 then performance = mods.EMPGenerator.LevelPerformances[systemLevel] end
+	--local performance = 1 
+	--[[if systemLevel > 0 and systemLevel < #mods.EMPGenerator.LevelPerformances + 1 then performance = mods.EMPGenerator.LevelPerformances[systemLevel] end
 		
 	---1 to 1 with chargebar
 	--Diameter: 2/3 base to 3/2 * performance 
@@ -158,38 +231,31 @@ function mods.EMPGenerator.getCDAndDiameterMult(systemLevel, barcharge)
 	if systemLevel == 0 then 
 		diameterMult = 1 
 		cooldownMult = 1 
+	end--]]
+
+	if systemLevel > 0 then 
+		local ss = mods.EMPGenerator.systemStats[systemLevel] 
+		--linear
+		local cooldown = (ss.maxCD * barcharge + ss.minCD * (1 - barcharge))
+		local diameter = (ss.maxDiameter * barcharge + ss.minDiameter * (1 - barcharge))
+
+		data.Cooldown = cooldown
+		data.Diameter = diameter
 	end
-
-	--[[local systemStats = {}
-	systemStats[1] = {minCD = 15, maxCD = 25, minDiameter = 30, maxDiameter = 50}
-	systemStats[2] = {minCD = 10, maxCD = 20, minDiameter = 30, maxDiameter = 90}
-	systemStats[3] = {minCD = 5, maxCD = 15, minDiameter = 30, maxDiameter = 130}
-
-	local ss = systemStats[systemLevel]
-	--linear, BaseDiameter and BaseCooldown are accounted for here, their values dont matter for size / cd of the EMP
-	--tooltips and whatnot still depend on BaseDiameter and BaseCooldown, so those need to be updated accordingly
-	local cooldownMult = (ss.maxCD * barcharge + ss.minCD * (1 - barcharge)) / mods.EMPGenerator.BaseCooldown
-	local diameterMult = (ss.maxDiameter * barcharge + ss.minDiameter * (1 - barcharge)) / mods.EMPGenerator.BaseDiameter--]]
-
-	data["CooldownMult"] = cooldownMult
-	data["DiameterMult"] = diameterMult
 
 	return data
 end
 
 --Handles tooltips and mousever descriptions per level
 function mods.EMPGenerator.get_level_description_empgenerator(systemId, level, tooltip)
-    if systemId == Hyperspace.ShipSystem.NameToSystemId("empgenerator") then
+    if systemId == Hyperspace.ShipSystem.NameToSystemId("empgenerator") and level > 0 then
 		local s = ""
-		if level == 1 then s = string.format("%.2f",mods.EMPGenerator.LevelPerformances[1]) .. "x Performance" end
-		if level == 2 then s = string.format("%.2f",mods.EMPGenerator.LevelPerformances[2]) .. "x Performance" end
-		if level == 3 then s = string.format("%.2f",mods.EMPGenerator.LevelPerformances[3]) .. "x Performance" end
-		if level == 4 then s = string.format("%.2f",mods.EMPGenerator.LevelPerformances[4]) .. "x Performance" end
-		
+		s = "CD: " .. string.format("%02.0f",mods.EMPGenerator.systemStats[level].minCD) .. "-" .. string.format("%02.0f",mods.EMPGenerator.systemStats[level].maxCD) .. 
+		"s Range: " .. string.format("%.0f",mods.EMPGenerator.systemStats[level].minDiameter) .. "-" .. string.format("%.0f",mods.EMPGenerator.systemStats[level].maxDiameter) .. "px"
 		--this will render above power state which sucks but nothing can be done about this except rewriting the tooltip later which I dont feel like doing
 		if tooltip then 
-			s = s .. "\n\nMin. Cooldown: 15s / Performance"
-			s = s .. "\nMax. Diameter: 144px * Performance"
+			--s = s .. "\n\nMin. Cooldown: " .. string.format("%.2f",mods.EMPGenerator.systemStats[level].minCD)
+			--s = s .. "\nMax. Diameter: " .. string.format("%.0f",mods.EMPGenerator.systemStats[level].maxDiameter)
 
 			s = s .. "\n\nAdd Power: " .. EMPHotkeys.keyNames[Hyperspace.metaVariables.EMPPowerKey]
 			s = s .. "\nRemove Power: " .. EMPHotkeys.keyNames[Hyperspace.metaVariables.EMPInverseKey] .. " + " .. EMPHotkeys.keyNames[Hyperspace.metaVariables.EMPPowerKey]
@@ -214,12 +280,15 @@ mods.EMPGenerator.enemyEMPHackFiredOnce = false
 local empgeneratorButtonOffset_x = 35
 local empgeneratorButtonOffset_y = -57
 
+mods.EMPGenerator.playerSystemBox = nil --preferable not to reference this unless you HAVE to
+
 --Handles initialization of custom system box
 local function empgenerator_construct_system_box(systemBox)
     if mods.EMPGenerator.is_empgenerator(systemBox) and systemBox.bPlayerUI == true then
         systemBox.extend.xOffset = 54
 
         local activateButton = Hyperspace.Button()
+		mods.EMPGenerator.playerSystemBox = systemBox
         activateButton:OnInit("", Hyperspace.Point(empgeneratorButtonOffset_x, empgeneratorButtonOffset_y))
         activateButton.hitbox.x = 10
         activateButton.hitbox.y = 12
@@ -312,12 +381,14 @@ local function deleteProjectiles(x, y, r, preview)
 				--fix graphic, often misaligned 
 				if projectile:GetType() ~= 5 and projectile:GetType() ~= 6 then --5 is beam I think, 6 is asb
 					Graphics.CSurface.GL_BlitImage(mods.EMPGenerator.DotImage, pointCursorScreen.x - width / 2, pointCursorScreen.y - height / 2, width, height, 0, Graphics.GL_Color(1, 0, 0, 1), false)
+					mods.EMPGenerator.EMPGenerator_targettingTargetCount = mods.EMPGenerator.EMPGenerator_targettingTargetCount + 1
 				end
 			else
 				if projectile:GetType() ~= 5 and projectile:GetType() ~= 6 then --5 is beam I think, 6 is asb
 					--projectile:Kill() --add vfx to dis
 					--kills after frame pause, fix somehow, THEREFORE
 					--projectile.position = Hyperspace.Pointf(2000, 2000) --yeet this mf outta here so that it isnt seen before its cleared by next tick
+					mods.EMPGenerator.EMPGenerator_targettingTargetCount = mods.EMPGenerator.EMPGenerator_targettingTargetCount + 1
 					if projectile:GetType() == 4 then -- bomb 
 						--projectile.death_animation
 						local xProj = projectile.position.x
@@ -330,7 +401,7 @@ local function deleteProjectiles(x, y, r, preview)
 						end
 						local wPoint = Hyperspace.Pointf(xProj, yProj)
 						local wPointf = Hyperspace.Pointf(wPoint.x, wPoint.y)
-						local blueprint = Hyperspace.Blueprints:GetWeaponBlueprint("THIS_BLUEPRINT_IS_MEANT_TO_BE_NIL") --produces default wp blueprint, should be good
+						local blueprint = Hyperspace.Blueprints:GetWeaponBlueprint("THIS_BLUEPRINT_IS_MEANT_TO_BE_NIL") --produces default wp blueprint, should give default blast death effect which we want
 
 						local laser = Hyperspace.Global.GetInstance():GetCApp().world.space:CreateLaserBlast(blueprint, wPointf, space, 0, wPointf, space, 0)
 						laser.death_animation.fScale = 1
@@ -347,7 +418,7 @@ local function deleteProjectiles(x, y, r, preview)
 	end
 end
 
-local function stunDrones(x, y, r, preview)
+local function stunDrones(x, y, r, duration, preview)
 	local spaceManager = Hyperspace.Global.GetInstance():GetCApp().world.space
 	local droneList = spaceManager.drones --doesnt count ship drones I think
 		
@@ -387,16 +458,20 @@ local function stunDrones(x, y, r, preview)
 				local height = 13
 				if isHackingDrone == false or isHackingDroneHacking == true or isHackingDroneAirborne == true then
 					Graphics.CSurface.GL_BlitImage(mods.EMPGenerator.DotImage, pointCursorScreen.x - width / 2, pointCursorScreen.y - height / 2, width, height, 0, Graphics.GL_Color(0, 0, 1, 1), false)
+					mods.EMPGenerator.EMPGenerator_targettingTargetCount = mods.EMPGenerator.EMPGenerator_targettingTargetCount + 1
 				end 
 			else
 				if isHackingDrone == false then
-					drone.ionStun = drone.ionStun + 8
+					drone.ionStun = drone.ionStun + duration
+					mods.EMPGenerator.EMPGenerator_targettingTargetCount = mods.EMPGenerator.EMPGenerator_targettingTargetCount + 1
 				else --this is a hacking drone
 					--local system = Hyperspace.Global.GetInstance():GetShipManager(drone:GetSpaceId()):GetSystemInRoom(drone.prefRoom)
 					if isHackingDroneHacking == true then --blow the drone up if its currently hacking
 						drone:BlowUp(true)
+						mods.EMPGenerator.EMPGenerator_targettingTargetCount = mods.EMPGenerator.EMPGenerator_targettingTargetCount + 1
 					elseif isHackingDroneAirborne == true then
-						drone.ionStun = drone.ionStun + 8
+						drone.ionStun = drone.ionStun + duration
+						mods.EMPGenerator.EMPGenerator_targettingTargetCount = mods.EMPGenerator.EMPGenerator_targettingTargetCount + 1
 					end
 				end
 			end
@@ -411,9 +486,9 @@ local function stunCrew(x, y, r, duration, preview)
 	
 	local crewList = nil
 	if empOnLeft == true then
-		crewList = Hyperspace.ships.player.vCrewList --does this include enemy boarders?
+		crewList = Hyperspace.ships.player.vCrewList 
 	else
-		crewList = Hyperspace.ships.enemy.vCrewList --does this include boarders?
+		crewList = Hyperspace.ships.enemy.vCrewList
 	end
 	
 	for i = 0, crewList:size() - 1 do
@@ -424,7 +499,7 @@ local function stunCrew(x, y, r, duration, preview)
 		local pointCursorWorld = mods.EMPGenerator.convertScreenPosToWorldPos(Hyperspace.Point(x, y), empOnLeft)
 		
 		local distSq = (x2 - pointCursorWorld.x) * (x2 - pointCursorWorld.x) + (y2 - pointCursorWorld.y) * (y2 - pointCursorWorld.y)
-			
+
 		if distSq < r * r then 
 			if preview then
 				local pointCursorScreen = mods.EMPGenerator.convertWorldPosToScreenPos(Hyperspace.Point(x2, y2), empOnLeft)
@@ -434,9 +509,11 @@ local function stunCrew(x, y, r, duration, preview)
 				if empOnLeft then index = 0 end
 				if Hyperspace.ShipGraph.GetShipInfo(index):GetRoomBlackedOut(crew.iRoomId) == false then
 					Graphics.CSurface.GL_BlitImage(mods.EMPGenerator.DotImage, pointCursorScreen.x - width / 2, pointCursorScreen.y - height / 2, width, height, 0, Graphics.GL_Color(1, 1, 0, 1), false)
+					mods.EMPGenerator.EMPGenerator_targettingTargetCount = mods.EMPGenerator.EMPGenerator_targettingTargetCount + 1
 				end
 			else
 				crew.fStunTime = crew.fStunTime + duration
+				mods.EMPGenerator.EMPGenerator_targettingTargetCount = mods.EMPGenerator.EMPGenerator_targettingTargetCount + 1
 			end
 		end
 	end
@@ -502,6 +579,7 @@ local function forceOpenDoors(x, y, r, preview)
 				door.health = 0
 				door:ApplyDamage(1)
 			end
+			mods.EMPGenerator.EMPGenerator_targettingTargetCount = mods.EMPGenerator.EMPGenerator_targettingTargetCount + 1
 		end
 	end
 end
@@ -538,6 +616,7 @@ local function applyIonDamage(x, y, r, preview)
 			else 
 				system:IonDamage(1)
 			end
+			mods.EMPGenerator.EMPGenerator_targettingTargetCount = mods.EMPGenerator.EMPGenerator_targettingTargetCount + 1
 		end
 	end
 end
@@ -561,13 +640,14 @@ local function createEMPVFX(x, y, r)
 	local blueprint = Hyperspace.Blueprints:GetWeaponBlueprint("EMPGENERATOR_EFFECT_VESSEL")
 
 	local laser = Hyperspace.Global.GetInstance():GetCApp().world.space:CreateLaserBlast(blueprint, wPointf, space, 0, wPointf, space, 0)
-	laser.death_animation.fScale = (r * 2 * 64.0 / 56.0) / 256
+	laser.death_animation.fScale = (r * 2 * 64.0 / 55.0) / 256
 	laser.death_animation:Start(false)
 end
 
 function mods.EMPGenerator.fireEMPTest(x, y, r)
+	mods.EMPGenerator.EMPGenerator_targettingTargetCount = 0
 	deleteProjectiles(x, y, r, false)
-	stunDrones(x, y, r, false)
+	stunDrones(x, y, r, 6.5, false)
 	stunCrew(x, y, r, 6.5, false)
 	forceOpenDoors(x, y, r, false)
 	--if(shipManager:HasAugmentation("EMPGENERATOR_ION_UPGRADE")) == 1 then
@@ -578,20 +658,33 @@ function mods.EMPGenerator.fireEMPTest(x, y, r)
 	Hyperspace.Sounds:PlaySoundMix("ionHit3", -1, false)
 end
 
-function mods.EMPGenerator.fireEMP(x, y, r, cooldownMult, stunDuration, shipManager, empSystem)
+function mods.EMPGenerator.fireEMP(x, y, r, cooldownIn, stunDuration, shipManager, empSystem)
 	--local system = shipManager:GetSystem(Hyperspace.ShipSystem.NameToSystemId("empgenerator"))
-	deleteProjectiles(x, y, r, false)
-	stunDrones(x, y, r, false)
-	stunCrew(x, y, r, stunDuration, false)
-	forceOpenDoors(x, y, r, false)
-	if(shipManager:HasAugmentation("EMPGENERATOR_ION_UPGRADE")) == 1 then
-		applyIonDamage(x, y, r, false)
+	mods.EMPGenerator.EMPGenerator_targettingTargetCount = 0
+
+	local empOnLeft = false
+	if x < mods.EMPGenerator.CutoffX or InCombat == false then empOnLeft = true end
+
+	local space = 0
+	if empOnLeft == false then space = 1 end
+
+	local canBypassSuperShields = false
+	if shipManager:HasAugmentation("ZOLTAN_BYPASS") ~= 0 then canBypassSuperShields = true end
+
+	deleteProjectiles(x, y, r, false) --these shouldnt be sensitive to super shield
+	stunDrones(x, y, r, stunDuration, false) --these shouldnt be sensitive to super shield
+	if shipManager.iShipId == space or mods.EMPGenerator.pointInSuperShield(space, mods.EMPGenerator.convertScreenPosToWorldPos(Hyperspace.Mouse.position, empOnLeft)) == false or canBypassSuperShields == true then
+		stunCrew(x, y, r, stunDuration, false)
+		forceOpenDoors(x, y, r, false)
+		if(shipManager:HasAugmentation("EMPGENERATOR_ION_UPGRADE")) == 1 then
+			applyIonDamage(x, y, r, false)
+		end
 	end
 	createEMPVFX(x, y, r)
 
 	Hyperspace.Sounds:PlaySoundMix("ionHit3", -1, false)
 
-	local cooldownTime = mods.EMPGenerator.BaseCooldown * cooldownMult
+	local cooldownTime = cooldownIn
 	local ionDamage = math.floor(cooldownTime / 5)
 	local remainingTime = cooldownTime - ionDamage * 5
 
@@ -610,7 +703,8 @@ local function empgenerator_click(systemBox, shift)
 			local mousePos = Hyperspace.Mouse.position 
 			local yCursorPos = mousePos.y
 			if yCursorPos > 644 then
-				mods.EMPGenerator.EMPgenerator_targetting = true --Indicate that we are now targeting the system
+				mods.EMPGenerator.EMPGenerator_targetting = true --Indicate that we are now targeting the system
+				mods.EMPGenerator.ClearSelections()
 			else
 				mods.EMPGenerator.HoldingChargeBar = true
 				--from 607 to 644
@@ -618,16 +712,21 @@ local function empgenerator_click(systemBox, shift)
 				--lower Y (higher on screen) is more radius, more cooldown
 				mods.EMPGenerator.BarChargeSetting = frac
 			end
-        elseif Hyperspace.Global.GetInstance():GetCApp().world.bStartedGame and mods.EMPGenerator.EMPgenerator_targetting == true then 
-            mods.EMPGenerator.EMPgenerator_targetting = false 
-			local mousePos = Hyperspace.Mouse.position 
-			local xCursorPos = mousePos.x
-			local yCursorPos = mousePos.y
+        elseif Hyperspace.Global.GetInstance():GetCApp().world.bStartedGame and mods.EMPGenerator.EMPGenerator_targetting == true then 
+			mods.EMPGenerator.ClearSelections() --DOESNT WORK THIS EARLY IN
+			if mods.EMPGenerator.EMPGenerator_targettingBlocked == false then
+				mods.EMPGenerator.EMPGenerator_targetting = false 
+				local mousePos = Hyperspace.Mouse.position 
+				local xCursorPos = mousePos.x
+				local yCursorPos = mousePos.y
 
-			local data = mods.EMPGenerator.getCDAndDiameterMult(systemBox.pSystem.powerState.first, mods.EMPGenerator.BarChargeSetting)
-			
-            mods.EMPGenerator.fireEMP(xCursorPos, yCursorPos, mods.EMPGenerator.BaseDiameter * data["DiameterMult"] / 2, data["CooldownMult"], mods.EMPGenerator.getStunDuration(systemBox.pSystem.powerState.first, mods.EMPGenerator.BarChargeSetting, false), Hyperspace.Global.GetInstance():GetShipManager(0), systemBox.pSystem)
-        end
+				local data = mods.EMPGenerator.getCDAndDiameter(mods.EMPGenerator.GetCurrentSysPower(systemBox.pSystem), mods.EMPGenerator.BarChargeSetting)
+				
+				mods.EMPGenerator.fireEMP(xCursorPos, yCursorPos, data.Diameter / 2, data.Cooldown, mods.EMPGenerator.getStunDuration(mods.EMPGenerator.GetCurrentSysPower(systemBox.pSystem), mods.EMPGenerator.BarChargeSetting, false), Hyperspace.Global.GetInstance():GetShipManager(0), systemBox.pSystem)
+			else
+				mods.EMPGenerator.EMPGenerator_targetting = false --this removes some funny (funny as in bad) behavior we dont want.
+			end
+		end
     end
     return Defines.Chain.CONTINUE
 end
@@ -636,15 +735,15 @@ script.on_internal_event(Defines.InternalEvents.SYSTEM_BOX_MOUSE_CLICK, empgener
 --handle rendering while targetting the system
 script.on_render_event(Defines.RenderEvents.MOUSE_CONTROL, function()
 	--scuffed way to tell if player is in event, map, main menu, etc. I don't think there's a better way to do this
-    if mods.EMPGenerator.EMPgenerator_targetting == true and (ShipLoopActive == true or Hyperspace.Global.GetInstance():GetCApp().gui.bPaused == true) then
+    if mods.EMPGenerator.EMPGenerator_targetting == true and (ShipLoopActive == true or Hyperspace.Global.GetInstance():GetCApp().gui.bPaused == true) then
 
 		local system = Hyperspace.Global.GetInstance():GetShipManager(0):GetSystem(Hyperspace.ShipSystem.NameToSystemId("empgenerator"))
 
-		local data = mods.EMPGenerator.getCDAndDiameterMult(system.powerState.first, mods.EMPGenerator.BarChargeSetting)
+		local data = mods.EMPGenerator.getCDAndDiameter(mods.EMPGenerator.GetCurrentSysPower(system), mods.EMPGenerator.BarChargeSetting)
 
         local mousePos = Hyperspace.Mouse.position 
 
-		local D = mods.EMPGenerator.BaseDiameter * data["DiameterMult"]
+		local D = data.Diameter
 		local startX = D 
 		
 		local flip = true
@@ -668,16 +767,29 @@ script.on_render_event(Defines.RenderEvents.MOUSE_CONTROL, function()
 		local xCorrection = (D - width) / 2
 		if flip then xCorrection = -xCorrection end
 		
-		--I dont know who designed it to work this way, but fuck you. I don't know how this works but it does.
-		--hide when in esc pls
+		mods.EMPGenerator.EMPGenerator_targettingTargetCount = 0
+
+		if mods.EMPGenerator.EMPGenerator_targettingBlocked == false then
 		Graphics.CSurface.GL_BlitImagePartial(mods.EMPGenerator.RedCircleImage, mousePos.x - width / 2 - xCorrection, mousePos.y - D / 2, width, D, 0, var1, 0, 1, 1, Graphics.GL_Color(1, 1, 1, 1), flip)
-    
-		deleteProjectiles(mousePos.x, mousePos.y, mods.EMPGenerator.BaseDiameter * data["DiameterMult"] / 2, true)
-		stunDrones(mousePos.x, mousePos.y, mods.EMPGenerator.BaseDiameter * data["DiameterMult"] / 2, true)
-		stunCrew(mousePos.x, mousePos.y, mods.EMPGenerator.BaseDiameter * data["DiameterMult"] / 2, nil, true)
-		forceOpenDoors(mousePos.x, mousePos.y, mods.EMPGenerator.BaseDiameter * data["DiameterMult"] / 2, true)
-		if(Hyperspace.Global.GetInstance():GetShipManager(0):HasAugmentation("EMPGENERATOR_ION_UPGRADE")) == 1 then
-			applyIonDamage(mousePos.x, mousePos.y, mods.EMPGenerator.BaseDiameter * data["DiameterMult"] / 2, true)
+			deleteProjectiles(mousePos.x, mousePos.y, data.Diameter / 2, true)
+			stunDrones(mousePos.x, mousePos.y, data.Diameter / 2, nil, true)
+
+			local empOnLeft = false
+			if mousePos.x < mods.EMPGenerator.CutoffX or InCombat == false then empOnLeft = true end
+
+			local space = 0
+			if empOnLeft == false then space = 1 end
+
+			local canBypassSuperShields = false
+			if Hyperspace.Global.GetInstance():GetShipManager(0):HasAugmentation("ZOLTAN_BYPASS") ~= 0 then canBypassSuperShields = true end
+
+			if Hyperspace.Global.GetInstance():GetShipManager(0).iShipId == space or mods.EMPGenerator.pointInSuperShield(space, mods.EMPGenerator.convertScreenPosToWorldPos(Hyperspace.Mouse.position, empOnLeft)) == false or canBypassSuperShields == true then
+				stunCrew(mousePos.x, mousePos.y, data.Diameter / 2, nil, true)
+				forceOpenDoors(mousePos.x, mousePos.y, data.Diameter / 2, true)
+				if(Hyperspace.Global.GetInstance():GetShipManager(0):HasAugmentation("EMPGENERATOR_ION_UPGRADE")) == 1 then
+					applyIonDamage(mousePos.x, mousePos.y, data.Diameter / 2, true)
+				end
+			end
 		end
 	end
 	ShipLoopActive = false --set to true if it is true in ShipLoop
@@ -685,9 +797,20 @@ end, function() end)
 
 --handle cancelling targetting by right clicking
 script.on_internal_event(Defines.InternalEvents.ON_MOUSE_R_BUTTON_DOWN, function(x,y) 
-    if mods.EMPGenerator.EMPgenerator_targetting == true then
-        mods.EMPGenerator.EMPgenerator_targetting = false
-    end
+	local activateButton = mods.EMPGenerator.playerSystemBox.table.activateButton
+	if activateButton.bHover and activateButton.bActive then
+		local mousePos = Hyperspace.Mouse.position 
+		local yCursorPos = mousePos.y
+		if yCursorPos > 644 then
+			mods.EMPGenerator.EMPGenerator_targetting = false
+		else
+			--mods.EMPGenerator.HoldingChargeBar = true
+			local frac = 0.5
+			mods.EMPGenerator.BarChargeSetting = frac
+		end
+	elseif mods.EMPGenerator.EMPGenerator_targetting == true then
+		mods.EMPGenerator.EMPGenerator_targetting = false
+	end
     return Defines.Chain.CONTINUE
 end)
 
@@ -701,7 +824,8 @@ function mods.EMPGenerator.setAugmentRarity(augmentID, rarity)
 	Hyperspace.Global.GetInstance():GetBlueprints():GetAugmentBlueprint(augmentID).desc.rarity = rarity
 end
 
-local CursorImage = nil;
+mods.EMPGenerator.Cursor1Image = nil;
+mods.EMPGenerator.Cursor2Image = nil;
 mods.EMPGenerator.Grid_off_image = nil;
 mods.EMPGenerator.Grid_on_image = nil;
 mods.EMPGenerator.Grid_select_image = nil;
@@ -709,6 +833,8 @@ mods.EMPGenerator.Grid_purple_image = nil;
 mods.EMPGenerator.Charging_off_image = nil;
 mods.EMPGenerator.Charging_on_image = nil;
 mods.EMPGenerator.Charging_select_image = nil;
+
+mods.EMPGenerator.systemOverlay = nil
 
 mods.EMPGenerator.buttonBase = nil
 local function OnInitLogic()
@@ -722,10 +848,15 @@ local function OnInitLogic()
 	mods.EMPGenerator.Charging_on_image = Hyperspace.Resources:GetImageId("systemUI/button_empgenerator2_charging_on.png")
 	mods.EMPGenerator.Charging_select_image = Hyperspace.Resources:GetImageId("systemUI/button_empgenerator2_charging_select.png")
 
-	EMPImage = Hyperspace.Resources:GetImageId("effects/emp_explosion.png")
+	mods.EMPGenerator.Cursor1Image = Hyperspace.Resources:GetImageId("mouse/cursor_EMP.png")
+	mods.EMPGenerator.Cursor2Image = Hyperspace.Resources:GetImageId("mouse/cursor_EMP2.png")
+
+	mods.EMPGenerator.systemOverlay = Hyperspace.Resources:GetImageId("icons/s_empgenerator_overlay2.png")
+
+	EMPImage = Hyperspace.Resources:GetImageId("effects/empgenerator_system_effect.png")
 	
 	mods.EMPGenerator.DotImage = Hyperspace.Resources:GetImageId("mouse/DotImage.png")
-	mods.EMPGenerator.systemId = Hyperspace.ShipSystem.NameToSystemId("empgenerator") 
+	--mods.EMPGenerator.systemId = Hyperspace.ShipSystem.NameToSystemId("empgenerator") 
 	
     mods.EMPGenerator.buttonBase = Hyperspace.Resources:CreateImagePrimitiveString("systemUI/button_empgenerator_base.png", empgeneratorButtonOffset_x, empgeneratorButtonOffset_y, 0, Graphics.GL_Color(1, 1, 1, 1), 1, false)
 
@@ -745,15 +876,73 @@ local function OnInitLogic()
 
 	if Hyperspace.metaVariables.playerEMPHackFiredOnce == 1 then mods.EMPGenerator.playerEMPHackFiredOnce = true end
 	if Hyperspace.metaVariables.enemyEMPHackFiredOnce == 1 then mods.EMPGenerator.enemyEMPHackFiredOnce = true end
-
-	mods.EMPGenerator.eventButtonAdded = Hyperspace.metaVariables.EMPButtonAlreadyAdded
 end
+
+--[[script.on_render_event(Defines.RenderEvents.SYSTEM_BOX, 
+function() 
+    return Defines.Chain.CONTINUE
+end, 
+function() 
+	Hyperspace.Mouse.iTeleporting = 1
+end)--]]
+
+--copied from a lily system
+--sets cursor
+local playerCursorRestore = nil
+local playerCursorRestoreInvalid = nil
+
+script.on_internal_event(Defines.InternalEvents.ON_TICK, function()
+    local shipManager = Hyperspace.ships.player
+	local sys = mods.EMPGenerator.playerSystemBox
+	local buttonHover = false
+	if sys ~= nil then
+		if sys.activateButton ~= nil then
+			buttonHover = sys.activateButton.bHover
+		end
+	end
+
+	--if (Hyperspace.Mouse.valid == false or buttonHover == true) and Hyperspace.Mouse.animateDoor == 0 then 
+	--[[if Hyperspace.Mouse.animateDoor == 0 then --for now
+		mods.EMPGenerator.EMPGenerator_targettingBlocked = false
+	else
+		mods.EMPGenerator.EMPGenerator_targettingBlocked = true
+	end--]]
+
+	mods.EMPGenerator.EMPGenerator_targettingBlocked = false
+
+    if shipManager ~= nil and mods.EMPGenerator.EMPGenerator_targetting == true and mods.EMPGenerator.EMPGenerator_targettingBlocked == false then
+        if playerCursorRestore == nil then
+            playerCursorRestore = Hyperspace.Mouse.validPointer
+            playerCursorRestoreInvalid = Hyperspace.Mouse.invalidPointer
+        end
+		if mods.EMPGenerator.EMPGenerator_targettingTargetCount > 0 then
+			if Hyperspace.Mouse.validPointer ~= mods.EMPGenerator.Cursor1Image then
+				Hyperspace.Mouse.validPointer = mods.EMPGenerator.Cursor1Image
+				Hyperspace.Mouse.invalidPointer = mods.EMPGenerator.Cursor1Image
+			end
+		else
+			if Hyperspace.Mouse.validPointer ~= mods.EMPGenerator.Cursor2Image then
+				Hyperspace.Mouse.validPointer = mods.EMPGenerator.Cursor2Image
+				Hyperspace.Mouse.invalidPointer = mods.EMPGenerator.Cursor2Image
+			end
+		end
+    elseif playerCursorRestore ~= nil then
+        Hyperspace.Mouse.validPointer = playerCursorRestore
+        Hyperspace.Mouse.invalidPointer = playerCursorRestoreInvalid
+        playerCursorRestore = nil
+        playerCursorRestoreInvalid = nil
+    end
+end)
+
+script.on_internal_event(Defines.InternalEvents.GET_RUN_SEED, function()
+	Hyperspace.metaVariables.EMPButtonAlreadyAdded = 0 
+end)
+
 
 script.on_init(function()
 	--OnInitLogic() 	--doesnt always run for some reason, fixed elsewhere
 	--this seems to run on run start instead, so this goes here.
 	--Hyperspace.CustomEventsParser.GetInstance():LoadEvent(Hyperspace.Global.GetInstance():GetCApp().world, "ADD_EMP_CONFIG_BUTTON", false, -1)
-	mods.EMPGenerator.eventButtonAdded = false
 end)
 
 local function getCurrentGridImage(systemBox)
@@ -792,10 +981,7 @@ local function getCurrentBarImage(systemBox)
 end
 
 local function autoLookForProjectilesToEMP(owner)
-	local shootData = {}
-	shootData["x"] = -1
-	shootData["y"] = -1
-	shootData["shootNow"] = false
+	local shootData = {x = -1, y = -1, shootNow = false}
 
 	local spaceManager = Hyperspace.Global.GetInstance():GetCApp().world.space
 	local projectileList = spaceManager.projectiles
@@ -814,9 +1000,9 @@ local function autoLookForProjectilesToEMP(owner)
 			if pointScreen.x > mods.EMPGenerator.CutoffX and owner == 1 then return shootData end --dont let it shoot right of player screen, AI is too stupid to allow it to stun its own ship.
 			if pointScreen.x <= mods.EMPGenerator.CutoffX and owner == 0 then return shootData end 
 
-			shootData["x"] = pointScreen.x
-			shootData["y"] = pointScreen.y
-			shootData["shootNow"] = true
+			shootData.x = pointScreen.x
+			shootData.y = pointScreen.y
+			shootData.shootNow = true
 
 			return shootData
 		end
@@ -827,10 +1013,7 @@ local function autoLookForProjectilesToEMP(owner)
 end
 
 local function autoLookForDronesToEMP(owner)
-	local shootData = {}
-	shootData["x"] = -1
-	shootData["y"] = -1
-	shootData["shootNow"] = false
+	local shootData = {x = -1, y = -1, shootNow = false}
 
 	local spaceManager = Hyperspace.Global.GetInstance():GetCApp().world.space
 	local droneList = spaceManager.drones
@@ -872,9 +1055,9 @@ local function autoLookForDronesToEMP(owner)
 				
 				local pointScreen = mods.EMPGenerator.convertWorldPosToScreenPos(Hyperspace.Point(x2, y2), projOnLeft)
 
-				shootData["x"] = pointScreen.x
-				shootData["y"] = pointScreen.y
-				shootData["shootNow"] = true
+				shootData.x = pointScreen.x
+				shootData.y = pointScreen.y
+				shootData.shootNow = true
 
 				return shootData
 			end
@@ -887,10 +1070,7 @@ local function autoLookForDronesToEMP(owner)
 end
 
 local function autoLookForCrewToEMP(owner)
-	local shootData = {}
-	shootData["x"] = -1
-	shootData["y"] = -1
-	shootData["shootNow"] = false
+	local shootData = {x = -1, y = -1, shootNow = false}
 	
 	local crewList1 = nil
 	if owner == 1 then
@@ -931,9 +1111,9 @@ local function autoLookForCrewToEMP(owner)
 
 				local pointScreen = mods.EMPGenerator.convertWorldPosToScreenPos(Hyperspace.Point(x2, y2), crewOnLeft)
 
-				shootData["x"] = pointScreen.x
-				shootData["y"] = pointScreen.y
-				shootData["shootNow"] = true
+				shootData.x = pointScreen.x
+				shootData.y = pointScreen.y
+				shootData.shootNow = true
 
 				return shootData
 			end
@@ -960,7 +1140,7 @@ mods.EMPGenerator.EnemyGoingToEMPTarget = false
 local function enemyAILogicOnTick()
 	local system = Hyperspace.Global.GetInstance():GetShipManager(1):GetSystem(Hyperspace.ShipSystem.NameToSystemId("empgenerator"))
 
-	local EMPdata = mods.EMPGenerator.getCDAndDiameterMult(system.powerState.first, mods.EMPGenerator.BarChargeSetting)
+	local EMPdata = mods.EMPGenerator.getCDAndDiameter(mods.EMPGenerator.GetCurrentSysPower(system), mods.EMPGenerator.BarChargeSetting)
 
 	if Hyperspace.Global.GetInstance():GetCApp().world.space.gamePaused == false then 
 		mods.EMPGenerator.TimeUntilEnemyEMPsCrew = mods.EMPGenerator.TimeUntilEnemyEMPsCrew - mods.EMPGenerator.GetGameTimeSinceLastIteration() 
@@ -969,21 +1149,21 @@ local function enemyAILogicOnTick()
 	--this is spaghetti
 	if mods.EMPGenerator.empgenerator_ready(system) and Hyperspace.Global.GetInstance():GetCApp().world.space.gamePaused == false then
 		local shootData = autoLookForProjectilesToEMP(1)
-		if shootData["shootNow"] == true and mods.EMPGenerator.EnemyGoingToEMPTarget == false then
+		if shootData.shootNow == true and mods.EMPGenerator.EnemyGoingToEMPTarget == false then
 			mods.EMPGenerator.TimeUntilEnemyEMPsTarget = mods.EMPGenerator.AIwaitTimeProjectiles --should be good enough 
 			mods.EMPGenerator.EnemyGoingToEMPTarget = true
 		end
-		if shootData["shootNow"] == false then
+		if shootData.shootNow == false then
 			shootData = autoLookForDronesToEMP(1)
-			if shootData["shootNow"] == true and mods.EMPGenerator.EnemyGoingToEMPTarget == false then
+			if shootData.shootNow == true and mods.EMPGenerator.EnemyGoingToEMPTarget == false then
 				mods.EMPGenerator.TimeUntilEnemyEMPsTarget = mods.EMPGenerator.AIwaitTimeDrones --should be good enough 
 				mods.EMPGenerator.EnemyGoingToEMPTarget = true
 			end
 		end
-		if shootData["shootNow"] == false and mods.EMPGenerator.EnemyGoingToStunCrew == false then
+		if shootData.shootNow == false and mods.EMPGenerator.EnemyGoingToStunCrew == false then
 			--dont save to shootData
 			local shootDataTemp = autoLookForCrewToEMP(1)
-			if shootDataTemp["shootNow"] == true then mods.EMPGenerator.TimeUntilEnemyEMPsCrew = mods.EMPGenerator.AIwaitTimeCrew mods.EMPGenerator.EnemyGoingToStunCrew = true end
+			if shootDataTemp.shootNow == true then mods.EMPGenerator.TimeUntilEnemyEMPsCrew = mods.EMPGenerator.AIwaitTimeCrew mods.EMPGenerator.EnemyGoingToStunCrew = true end
 		end
 		--[[if shootData["shootNow"] == true and EnemyGoingToEMPTarget == false then
 			TimeUntilEnemyEMPsTarget = 0.15 --should be good enough 
@@ -991,8 +1171,8 @@ local function enemyAILogicOnTick()
 		end--]]
 		
 		if mods.EMPGenerator.EnemyGoingToEMPTarget == true and mods.EMPGenerator.TimeUntilEnemyEMPsTarget < 0 then
-			if shootData["shootNow"] == true then
-				mods.EMPGenerator.fireEMP(shootData["x"], shootData["y"], mods.EMPGenerator.BaseDiameter * EMPdata["DiameterMult"] / 2, EMPdata["CooldownMult"], mods.EMPGenerator.getStunDuration(system.powerState.first, mods.EMPGenerator.BarChargeSetting, true), Hyperspace.Global.GetInstance():GetShipManager(1), system)
+			if shootData.shootNow == true then
+				mods.EMPGenerator.fireEMP(shootData.x, shootData.y, EMPdata.Diameter / 2, EMPdata.Cooldown, mods.EMPGenerator.getStunDuration(mods.EMPGenerator.GetCurrentSysPower(system), mods.EMPGenerator.BarChargeSetting, true), Hyperspace.Global.GetInstance():GetShipManager(1), system)
 			end
 			mods.EMPGenerator.TimeUntilEnemyEMPsCrew = -1
 			mods.EMPGenerator.EnemyGoingToStunCrew = false
@@ -1000,8 +1180,8 @@ local function enemyAILogicOnTick()
 			mods.EMPGenerator.EnemyGoingToEMPTarget = false
 		elseif mods.EMPGenerator.EnemyGoingToStunCrew == true and mods.EMPGenerator.TimeUntilEnemyEMPsCrew < 0 then
 			shootData = autoLookForCrewToEMP(1) 
-			if shootData["shootNow"] == true then
-				mods.EMPGenerator.fireEMP(shootData["x"], shootData["y"], mods.EMPGenerator.BaseDiameter * EMPdata["DiameterMult"] / 2, EMPdata["CooldownMult"], mods.EMPGenerator.getStunDuration(system.powerState.first, mods.EMPGenerator.BarChargeSetting, true), Hyperspace.Global.GetInstance():GetShipManager(1), system)
+			if shootData.shootNow == true then
+				mods.EMPGenerator.fireEMP(shootData.x, shootData.y, EMPdata.Diameter / 2, EMPdata.Cooldown, mods.EMPGenerator.getStunDuration(mods.EMPGenerator.GetCurrentSysPower(system), mods.EMPGenerator.BarChargeSetting, true), Hyperspace.Global.GetInstance():GetShipManager(1), system)
 			end
 			mods.EMPGenerator.TimeUntilEnemyEMPsCrew = -1
 			mods.EMPGenerator.EnemyGoingToStunCrew = false
@@ -1046,23 +1226,23 @@ local function EMPHacked(shipIndex, empSystem) --shipIndex and empSystem of the 
 
 		local x = nil
 		local y = nil
-		local data = mods.EMPGenerator.getCDAndDiameterMult(empSystem.powerState.first, 0.5)
-		local r = data["DiameterMult"] / 2
-		local cdMult = data["CooldownMult"]
+		local data = mods.EMPGenerator.getCDAndDiameter(mods.EMPGenerator.GetCurrentSysPower(empSystem), 0.5)
+		local r = data.Diameter / 2
+		local cd = data.Cooldown
 
 		local data1 = autoLookForProjectilesToEMP(1 - owner)
 		local data2 = autoLookForDronesToEMP(1 - owner)
 		local data3 = autoLookForCrewToEMP(1 - owner)
 
-		if data1["shootNow"] == true then
-			x = data1["x"]
-			y = data1["y"]
-		elseif data2["shootNow"] == true then
-			x = data2["x"]
-			y = data2["y"]
-		elseif data3["shootNow"] == true then
-			x = data3["x"]
-			y = data3["y"]
+		if data1.shootNow == true then
+			x = data1.x
+			y = data1.y
+		elseif data2.shootNow == true then
+			x = data2.x
+			y = data2.y
+		elseif data3.shootNow == true then
+			x = data3.x
+			y = data3.y
 		else
 			--nothing
 		end
@@ -1071,7 +1251,7 @@ local function EMPHacked(shipIndex, empSystem) --shipIndex and empSystem of the 
 		if shipIndex == 0 then isEnemy = true end
 
 		if x ~= nil and y ~= nil then
-			mods.EMPGenerator.fireEMP(x, y, mods.EMPGenerator.BaseDiameter * r, mods.EMPGenerator.getStunDuration(empSystem.powerState.first, mods.EMPGenerator.BarChargeSetting, isEnemy), cdMult, shipManager, empSystem)
+			mods.EMPGenerator.fireEMP(x, y, r, mods.EMPGenerator.getStunDuration(mods.EMPGenerator.GetCurrentSysPower(empSystem), mods.EMPGenerator.BarChargeSetting, isEnemy), cd, shipManager, empSystem)
 			if shipIndex == 0 and mods.EMPGenerator.playerEMPHackFiredOnce == false then mods.EMPGenerator.playerEMPHackFiredOnce = true Hyperspace.metaVariables.playerEMPHackFiredOnce = 1 end 
 			if shipIndex == 1 and mods.EMPGenerator.enemyEMPHackFiredOnce == false then mods.EMPGenerator.enemyEMPHackFiredOnce = true Hyperspace.metaVariables.enemyEMPHackFiredOnce = 1 end 
 		end
@@ -1089,7 +1269,7 @@ local function OnTickLogic(systemBox)
 		InCombat = false
 	end
 
-	--technically both enemy and player system go through here, but we shouldnt get double instances of emp hack effects unless ion damage is queued
+	--technically both enemy and player system go through here, but we shouldnt get double instances of emp hack effects
 	if InCombat == true then
 		if Hyperspace.Global.GetInstance():GetShipManager(0):GetSystem(Hyperspace.ShipSystem.NameToSystemId("empgenerator")) ~= nil then
 			local playerempSystem = Hyperspace.Global.GetInstance():GetShipManager(0):GetSystem(Hyperspace.ShipSystem.NameToSystemId("empgenerator"))
@@ -1176,20 +1356,20 @@ local function OnTickLogic(systemBox)
 
 	if systemBox.table.activateButton ~= nil then --allow key input
 		if systemBox.table.activateButton.bActive and mods.EMPGenerator.AimEMPKeyActive == true then
-			mods.EMPGenerator.EMPgenerator_targetting = true --Indicate that we are now targeting the system
+			mods.EMPGenerator.EMPGenerator_targetting = true --Indicate that we are now targeting the system
 		end
 
 		if mods.EMPGenerator.PowerKeyActive == true and mods.EMPGenerator.PowerKeyActiveLastTick == false then
 			--try add power 
 			if mods.EMPGenerator.InversePowerKeyActive == true then
-				if empSystem.powerState.first <= 0 then
+				if mods.EMPGenerator.GetCurrentSysPower(empSystem) <= 0 then
 					--nothing
 				else
 					empSystem:DecreasePower(true)
 					Hyperspace.Sounds:PlaySoundMix("powerDownSystem", -1, false)
 				end
 			else
-				if empSystem.powerState.first >= empSystem.powerState.second then
+				if mods.EMPGenerator.GetCurrentSysPower(empSystem) >= empSystem.powerState.second then
 					Hyperspace.Sounds:PlaySoundMix("powerUpFail", -1, false)
 				else
 					empSystem:IncreasePower(1, false)
@@ -1199,15 +1379,17 @@ local function OnTickLogic(systemBox)
 		end
 
 		if mods.EMPGenerator.IncreaseChargeKeyActive == true then
-			mods.EMPGenerator.BarChargeSetting = mods.EMPGenerator.BarChargeSetting + 0.6 * (os.clock() - OSClockLastTick)
+			mods.EMPGenerator.BarChargeSetting = mods.EMPGenerator.BarChargeSetting + 0.6 * mods.EMPGenerator.GetRealTimeSinceLastIteration()
 			if mods.EMPGenerator.BarChargeSetting > 1 then mods.EMPGenerator.BarChargeSetting = 1 end
 		elseif mods.EMPGenerator.DecreaseChargeKeyActive == true then
-			mods.EMPGenerator.BarChargeSetting = mods.EMPGenerator.BarChargeSetting - 0.6 * (os.clock() - OSClockLastTick)
+			mods.EMPGenerator.BarChargeSetting = mods.EMPGenerator.BarChargeSetting - 0.6 * mods.EMPGenerator.GetRealTimeSinceLastIteration()
 			if mods.EMPGenerator.BarChargeSetting < 0 then mods.EMPGenerator.BarChargeSetting = 0 end
 		end
 	end
 
 	mods.EMPGenerator.PowerKeyActiveLastTick = mods.EMPGenerator.PowerKeyActive
+
+	--print(mods.EMPGenerator.pointInShield(0, mods.EMPGenerator.convertScreenPosToWorldPos(Hyperspace.Mouse.position, true)))
 
 	OSClockLastTick = os.clock()
 end
@@ -1223,29 +1405,57 @@ local function empgenerator_render(systemBox, ignoreStatus)
 			Graphics.CSurface.GL_RenderPrimitive(mods.EMPGenerator.buttonBase)
 			--systemBox.table.activateButton:OnRender()
 			
+			--mods.EMPGenerator.setSystemSelectionStateLogic(systemBox.pSystem)
+
 			Graphics.CSurface.GL_BlitImage(getCurrentGridImage(systemBox), 36, -38, 40, 81, 0, Graphics.GL_Color(1, 1, 1, 1), false)
 			local var1 = 1 - mods.EMPGenerator.BarChargeSetting
 			Graphics.CSurface.GL_BlitImagePartial(getCurrentBarImage(systemBox), 36, -40 + 31 * (1 - mods.EMPGenerator.BarChargeSetting), 40, 31 * mods.EMPGenerator.BarChargeSetting, 0, 1, var1, 1, 1, Graphics.GL_Color(1, 1, 1, 1), false)
 		
-			local data = mods.EMPGenerator.getCDAndDiameterMult(systemBox.pSystem.powerState.first, mods.EMPGenerator.BarChargeSetting)
+			local data = mods.EMPGenerator.getCDAndDiameter(mods.EMPGenerator.GetCurrentSysPower(systemBox.pSystem), mods.EMPGenerator.BarChargeSetting)
 
 			--tooltip, should be fine enough
-			if activateButton.bHover and activateButton.bActive or mods.EMPGenerator.HoldingChargeBar == true then
-				Hyperspace.Mouse.bForceTooltip = true
-				if Hyperspace.Mouse.position.y <= 644 or mods.EMPGenerator.HoldingChargeBar == true then --charge bar 
-					local s = "Move this slider up to increase radius at expense of cooldown. Results scale with more power in system."
-					s = s .. "\n\nCharge: " .. string.format("%.0f", mods.EMPGenerator.BarChargeSetting * 100) .. "%"
-					s = s .. "\nDiameter Multiplier: " .. string.format("%.3f", data["DiameterMult"]) .. "x"
-					s = s .. "\nCooldown Multiplier: " .. string.format("%.3f", data["CooldownMult"]) .. "x"
+			if activateButton.bHover or mods.EMPGenerator.HoldingChargeBar == true then
+				--Hyperspace.Mouse.bForceTooltip = true
+				if activateButton.bActive then 
+					if Hyperspace.Mouse.position.y <= 644 or mods.EMPGenerator.HoldingChargeBar == true then --charge bar 
+						local s = "Move this slider up to increase diameter at expense of cooldown. Results scale with more power in system."
+						s = s .. "\n\nCurrent Power Setting: " .. string.format("%.0f", mods.EMPGenerator.BarChargeSetting * 100) .. "%"
 
-					s = s .. "\n\n+Charge Hotkey: " .. EMPHotkeys.keyNames[Hyperspace.metaVariables.EMPIncreaseChargeKey]
-					s = s .. "\n-Charge Hotkey: " .. EMPHotkeys.keyNames[Hyperspace.metaVariables.EMPDecreaseChargeKey]
+						s = s .. "\nPulse Diameter: " .. string.format("%.0f", data.Diameter) .. "px"
+						s = s .. "\nCooldown: " .. string.format("%.1f", data.Cooldown) .. " secs"
+						s = s .. "\nStun Duration: " .. string.format("%.1f", mods.EMPGenerator.getStunDuration(mods.EMPGenerator.GetCurrentSysPower(systemBox.pSystem), mods.EMPGenerator.BarChargeSetting, false)) .. " secs"
 
-					Hyperspace.Mouse.tooltip = s
+						s = s .. "\n\n+Charge Hotkey: " .. EMPHotkeys.keyNames[Hyperspace.metaVariables.EMPIncreaseChargeKey]
+						s = s .. "\n-Charge Hotkey: " .. EMPHotkeys.keyNames[Hyperspace.metaVariables.EMPDecreaseChargeKey]
+
+						--Hyperspace.Mouse.tooltip = s
+						Hyperspace.Mouse:SetTooltip(s)
+					else
+						local s = "Aim the EMP."
+						s = s .. "\n\nHotkey: " .. EMPHotkeys.keyNames[Hyperspace.metaVariables.EMPAimEMPKey]
+						--Hyperspace.Mouse.tooltip = s
+						Hyperspace.Mouse:SetTooltip(s)
+					end
 				else
-					local s = "Aim the EMP."
-					s = s .. "\n\nHotkey: " .. EMPHotkeys.keyNames[Hyperspace.metaVariables.EMPAimEMPKey]
-					Hyperspace.Mouse.tooltip = s
+					if Hyperspace.Mouse.position.y <= 644 or mods.EMPGenerator.HoldingChargeBar == true then --charge bar 
+						local s = "The slider cannot be changed while the system is cooling down."
+						s = s .. "\n\nCurrent Power Setting: " .. string.format("%.0f", mods.EMPGenerator.BarChargeSetting * 100) .. "%"
+
+						s = s .. "\nPulse Diameter: " .. string.format("%.0f", data.Diameter) .. "px"
+						s = s .. "\nCooldown: " .. string.format("%.1f", data.Cooldown) .. " secs"
+						s = s .. "\nStun Duration: " .. string.format("%.1f", mods.EMPGenerator.getStunDuration(mods.EMPGenerator.GetCurrentSysPower(systemBox.pSystem), mods.EMPGenerator.BarChargeSetting, false)) .. " secs"
+
+						s = s .. "\n\n+Charge Hotkey: " .. EMPHotkeys.keyNames[Hyperspace.metaVariables.EMPIncreaseChargeKey]
+						s = s .. "\n-Charge Hotkey: " .. EMPHotkeys.keyNames[Hyperspace.metaVariables.EMPDecreaseChargeKey]
+
+						--Hyperspace.Mouse.tooltip = s
+						Hyperspace.Mouse:SetTooltip(s)
+					else
+						local s = "The EMP cannot be currently aimed, it is cooling down."
+						s = s .. "\n\nHotkey: " .. EMPHotkeys.keyNames[Hyperspace.metaVariables.EMPAimEMPKey]
+						--Hyperspace.Mouse.tooltip = s
+						Hyperspace.Mouse:SetTooltip(s)
+					end
 				end
 			end
 
@@ -1254,9 +1464,9 @@ local function empgenerator_render(systemBox, ignoreStatus)
 		end
 
 		--sure this can be here
-		if mods.EMPGenerator.eventButtonAdded == false and Hyperspace.Global.GetInstance():GetCApp().gui.event_pause == false then
+		if Hyperspace.metaVariables.EMPButtonAlreadyAdded == 0 and Hyperspace.Global.GetInstance():GetCApp().gui.event_pause == false then
 			Hyperspace.CustomEventsParser.GetInstance():LoadEvent(Hyperspace.Global.GetInstance():GetCApp().world, "ADD_EMP_CONFIG_BUTTON", false, -1)
-			mods.EMPGenerator.eventButtonAdded = true
+			Hyperspace.metaVariables.EMPButtonAlreadyAdded = 1
 		end
 	else
 	end
@@ -1265,4 +1475,39 @@ script.on_render_event(Defines.RenderEvents.SYSTEM_BOX,
 function(systemBox, ignoreStatus) 
     return Defines.Chain.CONTINUE
 end, empgenerator_render)
+
+script.on_render_event(Defines.RenderEvents.SYSTEM_BOX, --has to be system box
+function(systemBox, ignoreStatus) 
+    return Defines.Chain.CONTINUE
+end, 
+function() 
+	if mods.EMPGenerator.playerSystemBox ~= nil then
+		mods.EMPGenerator.setSystemSelectionStateLogic(mods.EMPGenerator.playerSystemBox.pSystem)
+	end
+end)
+
+script.on_render_event(Defines.RenderEvents.FTL_BUTTON, 
+function() 
+    return Defines.Chain.CONTINUE
+end, 
+function() 
+	if mods.EMPGenerator.playerSystemBox ~= nil then
+		--is this *really* the best way to do this
+		if os.clock() < mods.EMPGenerator.timeEndFlash then
+			local system = mods.EMPGenerator.playerSystemBox.pSystem
+			local room = Hyperspace.Global.GetInstance():GetShipManager(0).ship.vRoomList[system:GetRoomId()]
+			--local rw = room.rect.w
+			--local rh = room.rect.h
+
+			local pointScreen = mods.EMPGenerator.convertWorldPosToScreenPos(system.location, true)
+			local x = pointScreen.x - mods.EMPGenerator.systemOverlay.width / 2
+			local y = pointScreen.y - mods.EMPGenerator.systemOverlay.height / 2
+
+			Graphics.CSurface.GL_BlitImage(mods.EMPGenerator.systemOverlay, x, y, mods.EMPGenerator.systemOverlay.width, mods.EMPGenerator.systemOverlay.height, 0, Graphics.GL_Color(1, 1, 0, 1), false)
+		end
+	end
+end)
+
+
+
 
