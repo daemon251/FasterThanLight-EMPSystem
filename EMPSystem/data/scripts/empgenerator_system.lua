@@ -39,14 +39,26 @@
 --on jump clear .. already fixed?
 --battery / zoltan power .. fixed?
 
+--1.2.1
+--mv support .. mostly done
+--adjusted level stats slightly .. done
+--give external aug to MV ships .. done
+--pricing and systemStats change for mv
+--fix lanius in MV not showing .. done
+--dont show aim if in event .. done
+--prevent misclick .. done
+--interiors -- done?
+--credit slow
+
+--notification
+
 --CONFIG
 mods.EMPGenerator = {}
 
---mods.EMPGenerator.LevelPerformances = {1.00, 1.25, 1.50, 1.75} --no longer used
 mods.EMPGenerator.systemStats = {	[1] = {minCD = 15, maxCD = 25, minDiameter = 48, maxDiameter = 144 * 1.00},
 									[2] = {minCD = 12, maxCD = 25, minDiameter = 48, maxDiameter = 144 * 1.25},
-									[3] = {minCD = 10, maxCD = 25, minDiameter = 48, maxDiameter = 144 * 1.50},
-									[4] = {minCD = 8 , maxCD = 25, minDiameter = 48, maxDiameter = 144 * 1.75}}
+									[3] = {minCD = 09, maxCD = 25, minDiameter = 48, maxDiameter = 144 * 1.50},
+									[4] = {minCD = 06, maxCD = 25, minDiameter = 48, maxDiameter = 144 * 1.75}}
 
 --level cost determined in blueprints
 
@@ -54,7 +66,7 @@ mods.EMPGenerator.systemStats = {	[1] = {minCD = 15, maxCD = 25, minDiameter = 4
 mods.EMPGenerator.CutoffXNormal = 882 --VANILLA setting, changed later if needed 
 mods.EMPGenerator.CutoffXBoss = 756 --VANILLA setting, changed later if needed
 
-mods.EMPGenerator.systemId = Hyperspace.ShipSystem.NameToSystemId("empgenerator")  
+mods.EMPGenerator.systemId = Hyperspace.ShipSystem.NameToSystemId("empgenerator") --shorthand
 
 mods.EMPGenerator.CutoffX = -1 --leftmost x cord of enemy box, set later on tick. Don't write to this from outside this file.
 mods.EMPGenerator.BarChargeSetting = 0.5 -- 0 to 1
@@ -209,10 +221,11 @@ function mods.EMPGenerator.setSystemSelectionStateLogic(system)
 end
 
 function mods.EMPGenerator.getStunDuration(systemLevel, barcharge, isEnemy)
+	--probably bad for crew to be able to be permastunned
 	if isEnemy then
-		return 6.5
+		return 5 + 2.5 * barcharge
 	else --for player EMP system
-		return 6.5
+		return 5 + 2.5 * barcharge
 	end
 end
 
@@ -584,7 +597,7 @@ local function forceOpenDoors(x, y, r, preview)
 	end
 end
 
-local function applyIonDamage(x, y, r, preview)
+local function applyIonDamage(x, y, r, preview, ionCount)
 	local empOnLeft = false
 	if x < mods.EMPGenerator.CutoffX or InCombat == false then empOnLeft = true end
 	
@@ -614,7 +627,7 @@ local function applyIonDamage(x, y, r, preview)
 				local height = 13
 				Graphics.CSurface.GL_BlitImage(mods.EMPGenerator.DotImage, pointCursorScreen.x - width / 2, pointCursorScreen.y - height / 2, width, height, 0, Graphics.GL_Color(0, 1, 1, 1), false)
 			else 
-				system:IonDamage(1)
+				system:IonDamage(ionCount)
 			end
 			mods.EMPGenerator.EMPGenerator_targettingTargetCount = mods.EMPGenerator.EMPGenerator_targettingTargetCount + 1
 		end
@@ -651,7 +664,7 @@ function mods.EMPGenerator.fireEMPTest(x, y, r)
 	stunCrew(x, y, r, 6.5, false)
 	forceOpenDoors(x, y, r, false)
 	--if(shipManager:HasAugmentation("EMPGENERATOR_ION_UPGRADE")) == 1 then
-	--	applyIonDamage(x, y, r, false)
+	--	applyIonDamage(x, y, r, false, 1)
 	--end
 	createEMPVFX(x, y, r)
 
@@ -676,8 +689,9 @@ function mods.EMPGenerator.fireEMP(x, y, r, cooldownIn, stunDuration, shipManage
 	if shipManager.iShipId == space or mods.EMPGenerator.pointInSuperShield(space, mods.EMPGenerator.convertScreenPosToWorldPos(Hyperspace.Mouse.position, empOnLeft)) == false or canBypassSuperShields == true then
 		stunCrew(x, y, r, stunDuration, false)
 		forceOpenDoors(x, y, r, false)
-		if(shipManager:HasAugmentation("EMPGENERATOR_ION_UPGRADE")) == 1 then
-			applyIonDamage(x, y, r, false)
+		if(shipManager:HasAugmentation("EMPGENERATOR_ION_UPGRADE")) > 0 or (shipManager:HasAugmentation("EX_EMPGENERATOR_ION_UPGRADE")) > 0 then
+			local count = shipManager:HasAugmentation("EMPGENERATOR_ION_UPGRADE") + shipManager:HasAugmentation("EX_EMPGENERATOR_ION_UPGRADE")
+			applyIonDamage(x, y, r, false, count)
 		end
 	end
 	createEMPVFX(x, y, r)
@@ -698,34 +712,38 @@ mods.EMPGenerator.HoldingChargeBar = false
 --Handles click events 
 local function empgenerator_click(systemBox, shift)
     if mods.EMPGenerator.is_empgenerator(systemBox) then
-        local activateButton = systemBox.table.activateButton
-        if activateButton.bHover and activateButton.bActive then
-			local mousePos = Hyperspace.Mouse.position 
-			local yCursorPos = mousePos.y
-			if yCursorPos > 644 then
-				mods.EMPGenerator.EMPGenerator_targetting = true --Indicate that we are now targeting the system
-				mods.EMPGenerator.ClearSelections()
-			else
-				mods.EMPGenerator.HoldingChargeBar = true
-				--from 607 to 644
-				local frac =  (644 - yCursorPos) / 37
-				--lower Y (higher on screen) is more radius, more cooldown
-				mods.EMPGenerator.BarChargeSetting = frac
-			end
-        elseif Hyperspace.Global.GetInstance():GetCApp().world.bStartedGame and mods.EMPGenerator.EMPGenerator_targetting == true then 
-			mods.EMPGenerator.ClearSelections() --DOESNT WORK THIS EARLY IN
-			if mods.EMPGenerator.EMPGenerator_targettingBlocked == false then
-				mods.EMPGenerator.EMPGenerator_targetting = false 
+		local activateButton = systemBox.table.activateButton
+		if mods.EMPGenerator.EMPGenerator_targettingTargetCount > 0 or (activateButton.bHover and activateButton.bActive) then
+			if activateButton.bHover and activateButton.bActive then
 				local mousePos = Hyperspace.Mouse.position 
-				local xCursorPos = mousePos.x
 				local yCursorPos = mousePos.y
+				if yCursorPos > 644 then
+					mods.EMPGenerator.EMPGenerator_targetting = true --Indicate that we are now targeting the system
+					mods.EMPGenerator.ClearSelections()
+				else
+					mods.EMPGenerator.HoldingChargeBar = true
+					--from 607 to 644
+					local frac =  (644 - yCursorPos) / 37
+					--lower Y (higher on screen) is more radius, more cooldown
+					mods.EMPGenerator.BarChargeSetting = frac
+				end
+			elseif Hyperspace.Global.GetInstance():GetCApp().world.bStartedGame and mods.EMPGenerator.EMPGenerator_targetting == true then 
+				mods.EMPGenerator.ClearSelections() --DOESNT WORK THIS EARLY IN
+				if mods.EMPGenerator.EMPGenerator_targettingBlocked == false then
+					mods.EMPGenerator.EMPGenerator_targetting = false 
+					local mousePos = Hyperspace.Mouse.position 
+					local xCursorPos = mousePos.x
+					local yCursorPos = mousePos.y
 
-				local data = mods.EMPGenerator.getCDAndDiameter(mods.EMPGenerator.GetCurrentSysPower(systemBox.pSystem), mods.EMPGenerator.BarChargeSetting)
-				
-				mods.EMPGenerator.fireEMP(xCursorPos, yCursorPos, data.Diameter / 2, data.Cooldown, mods.EMPGenerator.getStunDuration(mods.EMPGenerator.GetCurrentSysPower(systemBox.pSystem), mods.EMPGenerator.BarChargeSetting, false), Hyperspace.Global.GetInstance():GetShipManager(0), systemBox.pSystem)
-			else
-				mods.EMPGenerator.EMPGenerator_targetting = false --this removes some funny (funny as in bad) behavior we dont want.
+					local data = mods.EMPGenerator.getCDAndDiameter(mods.EMPGenerator.GetCurrentSysPower(systemBox.pSystem), mods.EMPGenerator.BarChargeSetting)
+					
+					mods.EMPGenerator.fireEMP(xCursorPos, yCursorPos, data.Diameter / 2, data.Cooldown, mods.EMPGenerator.getStunDuration(mods.EMPGenerator.GetCurrentSysPower(systemBox.pSystem), mods.EMPGenerator.BarChargeSetting, false), Hyperspace.Global.GetInstance():GetShipManager(0), systemBox.pSystem)
+				else
+					mods.EMPGenerator.EMPGenerator_targetting = false --this removes some funny (funny as in bad) behavior we dont want.
+				end
 			end
+		elseif mods.EMPGenerator.EMPGenerator_targetting  == true and mods.EMPGenerator.EMPGenerator_targettingBlocked == false and activateButton.bHover == false then
+			Hyperspace.Sounds:PlaySoundMix("powerUpFail", -1, false) --should we play this sound?
 		end
     end
     return Defines.Chain.CONTINUE
@@ -786,8 +804,8 @@ script.on_render_event(Defines.RenderEvents.MOUSE_CONTROL, function()
 			if Hyperspace.Global.GetInstance():GetShipManager(0).iShipId == space or mods.EMPGenerator.pointInSuperShield(space, mods.EMPGenerator.convertScreenPosToWorldPos(Hyperspace.Mouse.position, empOnLeft)) == false or canBypassSuperShields == true then
 				stunCrew(mousePos.x, mousePos.y, data.Diameter / 2, nil, true)
 				forceOpenDoors(mousePos.x, mousePos.y, data.Diameter / 2, true)
-				if(Hyperspace.Global.GetInstance():GetShipManager(0):HasAugmentation("EMPGENERATOR_ION_UPGRADE")) == 1 then
-					applyIonDamage(mousePos.x, mousePos.y, data.Diameter / 2, true)
+				if(Hyperspace.Global.GetInstance():GetShipManager(0):HasAugmentation("EMPGENERATOR_ION_UPGRADE")) > 0 or (Hyperspace.Global.GetInstance():GetShipManager(0):HasAugmentation("EX_EMPGENERATOR_ION_UPGRADE")) > 0 then
+					applyIonDamage(mousePos.x, mousePos.y, data.Diameter / 2, true, 1)
 				end
 			end
 		end
@@ -817,6 +835,11 @@ end)
 --Utility function to see if the system is ready for use
 function mods.EMPGenerator.empgenerator_ready(shipSystem)
    	return not shipSystem:GetLocked() and shipSystem:Functioning()
+end
+
+-- raahhhhhh
+function mods.EMPGenerator.setEMPSystemCostsForMV()
+
 end
 
 function mods.EMPGenerator.setAugmentRarity(augmentID, rarity)
@@ -863,7 +886,17 @@ local function OnInitLogic()
 	if mods.multiverse ~= nil then --multiverse
 		mods.EMPGenerator.CutoffXNormal = 873
 		mods.EMPGenerator.CutoffXBoss = 747
-		mods.EMPGenerator.setAugmentRarity("EMPGENERATOR_ION_UPGRADE", 3) --becomes internal upgrade, dont make it spawn in stores --- DOOOOO LATERRRRR
+		mods.EMPGenerator.setAugmentRarity("EMPGENERATOR_ION_UPGRADE", 0) --becomes internal upgrade, dont make it spawn in stores
+
+		--done at patch time
+		--mods.EMPGenerator.setEMPSystemCostsForMV()
+
+		--different stat table for MV
+		--[[mods.EMPGenerator.systemStats = {	[1] = {minCD = 15, maxCD = 25, minDiameter = 48, maxDiameter = 144 * 1.00},
+											[2] = {minCD = 10, maxCD = 25, minDiameter = 48, maxDiameter = 144 * 1.25},
+											[3] = {minCD = 06, maxCD = 25, minDiameter = 48, maxDiameter = 144 * 1.50},
+											[4] = {minCD = 04, maxCD = 25, minDiameter = 48, maxDiameter = 144 * 1.75}}--]]
+
 	elseif mods.vertexutil ~= nil then --ins probably
 		mods.EMPGenerator.CutoffXNormal = 873
 		mods.EMPGenerator.CutoffXBoss = 747
@@ -908,7 +941,11 @@ script.on_internal_event(Defines.InternalEvents.ON_TICK, function()
 		mods.EMPGenerator.EMPGenerator_targettingBlocked = true
 	end--]]
 
-	mods.EMPGenerator.EMPGenerator_targettingBlocked = false
+	if Hyperspace.Global.GetInstance():GetCApp().gui.event_pause == true or Hyperspace.Global.GetInstance():GetCApp().gui.menu_pause == true then
+		mods.EMPGenerator.EMPGenerator_targettingBlocked = true
+	else
+		mods.EMPGenerator.EMPGenerator_targettingBlocked = false
+	end
 
     if shipManager ~= nil and mods.EMPGenerator.EMPGenerator_targetting == true and mods.EMPGenerator.EMPGenerator_targettingBlocked == false then
         if playerCursorRestore == nil then
@@ -934,10 +971,70 @@ script.on_internal_event(Defines.InternalEvents.ON_TICK, function()
     end
 end)
 
+local function replaceCrew(crewToReplace, race)
+	local name = crewToReplace:GetName()
+	local roomId = crewToReplace.iRoomId
+	crewToReplace:Kill(true) --ouch!
+	Hyperspace.Global.GetInstance():GetShipManager(0):AddCrewMemberFromString(name, race, false, roomId, true, true)
+end
+
+local function countSpecies(speciesName)
+	local count = 0
+	for i = 0, Hyperspace.Global.GetInstance():GetShipManager(0).vCrewList:size() - 1 do
+		if Hyperspace.Global.GetInstance():GetShipManager(0).vCrewList[i]:GetSpecies() == speciesName then
+			count = count + 1
+		end
+	end
+	return count
+end
+
+local function multiverseShipPatch()
+	if Hyperspace.Global.GetInstance():GetShipManager(0).myBlueprint.blueprintName == "PLAYER_SHIP_EMPGENERATOR" then
+		Hyperspace.Global.GetInstance():GetShipManager(0):AddAugmentation("HIDDEN FOR_MULTIVERSE")
+		Hyperspace.Global.GetInstance():GetShipManager(0):AddAugmentation("HIDDEN SHIP_KESTREL")
+
+		while countSpecies("lanius") < 1 do
+			replaceCrew(Hyperspace.Global.GetInstance():GetShipManager(0).vCrewList[0], "lanius") --bp uses anaerobic, mv uses lanius, so has to fix here
+		end
+		
+	elseif Hyperspace.Global.GetInstance():GetShipManager(0).myBlueprint.blueprintName == "PLAYER_SHIP_EMPGENERATOR_2" then
+		Hyperspace.Global.GetInstance():GetShipManager(0):AddAugmentation("HIDDEN FOR_MULTIVERSE")
+		Hyperspace.Global.GetInstance():GetShipManager(0):AddAugmentation("HIDDEN SHIP_STEALTH")
+	elseif Hyperspace.Global.GetInstance():GetShipManager(0).myBlueprint.blueprintName == "PLAYER_SHIP_EMPGENERATOR_3" then
+		Hyperspace.Global.GetInstance():GetShipManager(0):AddAugmentation("HIDDEN FOR_MULTIVERSE")
+		Hyperspace.Global.GetInstance():GetShipManager(0):AddAugmentation("HIDDEN SHIP_LANIUS")
+
+		while countSpecies("lanius") < 2 do
+			local crew1 = Hyperspace.Global.GetInstance():GetShipManager(0).vCrewList[0]
+			local crew2 = Hyperspace.Global.GetInstance():GetShipManager(0).vCrewList[1]
+
+			replaceCrew(crew1, "lanius") --bp uses anaerobic, mv uses lanius, so has to fix here
+			replaceCrew(crew2, "lanius") --bp uses anaerobic, mv uses lanius, so has to fix here
+		end
+	end
+
+	if(Hyperspace.Global.GetInstance():GetShipManager(0):HasAugmentation("EMPGENERATOR_ION_UPGRADE")) > 0 then
+		--replace it with the external version
+		Hyperspace.Global.GetInstance():GetShipManager(0):AddAugmentation("EX_EMPGENERATOR_ION_UPGRADE")
+		Hyperspace.Global.GetInstance():GetShipManager(0):RemoveAugmentation("EMPGENERATOR_ION_UPGRADE")
+	end
+end
+
 script.on_internal_event(Defines.InternalEvents.GET_RUN_SEED, function()
 	Hyperspace.metaVariables.EMPButtonAlreadyAdded = 0 
+
+	--applies at start of run
+	if mods.multiverse ~= nil then 
+		multiverseShipPatch()
+	end
 end)
 
+--applies in hangar
+script.on_internal_event(Defines.InternalEvents.SHIP_LOOP, function()
+	if mods.multiverse ~= nil and Hyperspace.Global.GetInstance():GetShipManager(0).iCustomizeMode == 2 then 
+		multiverseShipPatch()
+	end
+end)
 
 script.on_init(function()
 	--OnInitLogic() 	--doesnt always run for some reason, fixed elsewhere

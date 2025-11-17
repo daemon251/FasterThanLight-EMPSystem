@@ -65,6 +65,7 @@
 	<mod-append:script>data/scripts/empgenerator_system.lua</mod-append:script>
 	<mod-append:script>data/scripts/empgenerator_hotkey_rebind_jtq.lua</mod-append:script>
 	<mod-append:script>data/scripts/empgenerator_blueoptions_namer.lua</mod-append:script>
+	<!--<mod-append:script>data/scripts/empgenerator_set_systemCosts_multiverseOnly.lua</mod-append:script>-->
 	
 	<!--<mod-append:script>data/scripts/empgenerator_system_overwrite.lua</mod-append:script>-->
 </mod:findLike>

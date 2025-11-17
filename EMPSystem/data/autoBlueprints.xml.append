@@ -40,7 +40,10 @@
     <mod-append:name>empgenerator</mod-append:name>
 </mod:findName>
 
-
+<blueprintList name="EMPGENERATOR_ION_UPGRADE_LIST">
+    <name>EMPGENERATOR_ION_UPGRADE</name>
+    <name>EX_EMPGENERATOR_ION_UPGRADE</name>
+</blueprintList>
 
 
 
