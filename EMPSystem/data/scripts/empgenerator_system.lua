@@ -2,63 +2,22 @@
 
 --various save load glitches
 --doors weird ... fixed?
---change cursor
 
---1.1.0
---blue options .. done? maybe more to be done?
---add augment dynamically, MV internal upgrade thing
---systemId .. done... perhaps?
---change power gfx
---enemy doesnt choose to hack emp system?
---stealth b crashes in MV on pick
---realtime function
---exposed some more stuff on the developer side
---start beacon is no longer overriden, MV now works properly because of this
---fixed issue with incorrect offset in system list
---emp button adds again on save load
-
---1.1.2
---hacking drone mid pulse .. drone destroyed.. should be good
-
---1.2.0
---mods.EMPGenerator.systemId is now set on game start instead of first time EMP system appears
---EMP vfx used a lower-resolution file, hardly makes a difference though because only anisotropic filtering was applied to the image
---changed the way the EMP slider works, works similar to before but now on linear scale 
---fixed EMP button being needlessly added again after save-quit loading, for real this time.
---Can now right click the slider to set it to 50%
---Fixed some behavior of when the system is not powered
---Mouse cursor now changes when aimed
---system image now reacts to system power being changed by bind 
---fixed lanius ships in vanilla from not being able to install the system, because for some reason AE's ship blueprints are split into two files for some reason
---fixed the empgen B variant ship from crashing the game if stealth_3.txt was not given an extra room by another mod (it now works in MV and vanilla)
-
---fix dragging thing
---aiming EMP only does EMP
---tooltip .. should be fixed?
---super shields .. fixed?
---on jump clear .. already fixed?
---battery / zoltan power .. fixed?
-
---1.2.1
---mv support .. mostly done
---adjusted level stats slightly .. done
---give external aug to MV ships .. done
---pricing and systemStats change for mv
---fix lanius in MV not showing .. done
---dont show aim if in event .. done
---prevent misclick .. done
---interiors -- done?
---credit slow
-
---notification
+--1.2.x
+--notification 
+--short range sensors / slug .. done
+--misclick prevention toggle .. done
+--diameter mult change .. done
+--mv events
+--selection fix
 
 --CONFIG
 mods.EMPGenerator = {}
 
-mods.EMPGenerator.systemStats = {	[1] = {minCD = 15, maxCD = 25, minDiameter = 48, maxDiameter = 144 * 1.00},
-									[2] = {minCD = 12, maxCD = 25, minDiameter = 48, maxDiameter = 144 * 1.25},
-									[3] = {minCD = 09, maxCD = 25, minDiameter = 48, maxDiameter = 144 * 1.50},
-									[4] = {minCD = 06, maxCD = 25, minDiameter = 48, maxDiameter = 144 * 1.75}}
+mods.EMPGenerator.systemStats = {	[1] = {minCD = 15, maxCD = 25, minDiameter = 48, maxDiameter = 128 * 0.75},
+									[2] = {minCD = 12, maxCD = 25, minDiameter = 48, maxDiameter = 128 * 1.00},
+									[3] = {minCD = 09, maxCD = 25, minDiameter = 48, maxDiameter = 128 * 1.25},
+									[4] = {minCD = 06, maxCD = 25, minDiameter = 48, maxDiameter = 128 * 1.50}}
 
 --level cost determined in blueprints
 
@@ -91,6 +50,26 @@ function mods.EMPGenerator.ClearSelections()
 	local crewControl = Hyperspace.Global.GetInstance():GetCApp().gui.crewControl
 	crewControl.selectedCrew:clear()
 	crewControl.potentialSelectedCrew:clear()
+end
+
+function mods.EMPGenerator.secondarySensorsActive()
+	if Hyperspace.Global.GetInstance():GetShipManager(0):HasAugmentation("LIFE_SCANNER") > 0 then return true end
+
+	--seems kind of expensive to iterate through all crew like this
+	local crewList = Hyperspace.ships.player.vCrewList 
+	for i = 0, crewList:size() - 1 do
+		if crewList[i].iShipId == 0 and crewList[i]:IsTelepathic() == true then
+			return true
+		end
+	end
+
+	local crewList2 = Hyperspace.ships.enemy.vCrewList 
+	for i = 0, crewList2:size() - 1 do
+		if crewList2[i].iShipId == 0 and crewList2[i]:IsTelepathic() == true then
+			return true
+		end
+	end
+	return false
 end
 
 --world point
@@ -520,7 +499,7 @@ local function stunCrew(x, y, r, duration, preview)
 				local height = 13
 				local index = 1
 				if empOnLeft then index = 0 end
-				if Hyperspace.ShipGraph.GetShipInfo(index):GetRoomBlackedOut(crew.iRoomId) == false then
+				if Hyperspace.ShipGraph.GetShipInfo(index):GetRoomBlackedOut(crew.iRoomId) == false or mods.EMPGenerator.secondarySensorsActive() == true then
 					Graphics.CSurface.GL_BlitImage(mods.EMPGenerator.DotImage, pointCursorScreen.x - width / 2, pointCursorScreen.y - height / 2, width, height, 0, Graphics.GL_Color(1, 1, 0, 1), false)
 					mods.EMPGenerator.EMPGenerator_targettingTargetCount = mods.EMPGenerator.EMPGenerator_targettingTargetCount + 1
 				end
@@ -713,7 +692,7 @@ mods.EMPGenerator.HoldingChargeBar = false
 local function empgenerator_click(systemBox, shift)
     if mods.EMPGenerator.is_empgenerator(systemBox) then
 		local activateButton = systemBox.table.activateButton
-		if mods.EMPGenerator.EMPGenerator_targettingTargetCount > 0 or (activateButton.bHover and activateButton.bActive) then
+		if (mods.EMPGenerator.EMPGenerator_targettingTargetCount > 0 or Hyperspace.metaVariables.EMPPreventMisclicks == 0) or (activateButton.bHover and activateButton.bActive) then
 			if activateButton.bHover and activateButton.bActive then
 				local mousePos = Hyperspace.Mouse.position 
 				local yCursorPos = mousePos.y
@@ -742,7 +721,7 @@ local function empgenerator_click(systemBox, shift)
 					mods.EMPGenerator.EMPGenerator_targetting = false --this removes some funny (funny as in bad) behavior we dont want.
 				end
 			end
-		elseif mods.EMPGenerator.EMPGenerator_targetting  == true and mods.EMPGenerator.EMPGenerator_targettingBlocked == false and activateButton.bHover == false then
+		elseif mods.EMPGenerator.EMPGenerator_targetting == true and mods.EMPGenerator.EMPGenerator_targettingBlocked == false and activateButton.bHover == false then
 			Hyperspace.Sounds:PlaySoundMix("powerUpFail", -1, false) --should we play this sound?
 		end
     end
@@ -888,15 +867,6 @@ local function OnInitLogic()
 		mods.EMPGenerator.CutoffXBoss = 747
 		mods.EMPGenerator.setAugmentRarity("EMPGENERATOR_ION_UPGRADE", 0) --becomes internal upgrade, dont make it spawn in stores
 
-		--done at patch time
-		--mods.EMPGenerator.setEMPSystemCostsForMV()
-
-		--different stat table for MV
-		--[[mods.EMPGenerator.systemStats = {	[1] = {minCD = 15, maxCD = 25, minDiameter = 48, maxDiameter = 144 * 1.00},
-											[2] = {minCD = 10, maxCD = 25, minDiameter = 48, maxDiameter = 144 * 1.25},
-											[3] = {minCD = 06, maxCD = 25, minDiameter = 48, maxDiameter = 144 * 1.50},
-											[4] = {minCD = 04, maxCD = 25, minDiameter = 48, maxDiameter = 144 * 1.75}}--]]
-
 	elseif mods.vertexutil ~= nil then --ins probably
 		mods.EMPGenerator.CutoffXNormal = 873
 		mods.EMPGenerator.CutoffXBoss = 747
@@ -1005,7 +975,7 @@ local function multiverseShipPatch()
 		Hyperspace.Global.GetInstance():GetShipManager(0):AddAugmentation("HIDDEN SHIP_LANIUS")
 
 		while countSpecies("lanius") < 2 do
-			local crew1 = Hyperspace.Global.GetInstance():GetShipManager(0).vCrewList[0]
+			local crew1 = Hyperspace.Global.GetInstance():GetShipManager(0).vCrewList[0] 
 			local crew2 = Hyperspace.Global.GetInstance():GetShipManager(0).vCrewList[1]
 
 			replaceCrew(crew1, "lanius") --bp uses anaerobic, mv uses lanius, so has to fix here
@@ -1018,6 +988,10 @@ local function multiverseShipPatch()
 		Hyperspace.Global.GetInstance():GetShipManager(0):AddAugmentation("EX_EMPGENERATOR_ION_UPGRADE")
 		Hyperspace.Global.GetInstance():GetShipManager(0):RemoveAugmentation("EMPGENERATOR_ION_UPGRADE")
 	end
+
+    if mods.multiverse.systemIcons[Hyperspace.ShipSystem.NameToSystemId("empgenerator")] == nil then
+        mods.multiverse.systemIcons[Hyperspace.ShipSystem.NameToSystemId("empgenerator")] = mods.multiverse.register_system_icon("empgenerator")
+    end
 end
 
 script.on_internal_event(Defines.InternalEvents.GET_RUN_SEED, function()

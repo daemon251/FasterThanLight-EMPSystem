@@ -230,6 +230,11 @@ script.on_internal_event(Defines.InternalEvents.ON_KEY_DOWN, function(key)
 	end
 end)
 
+local function convertIntToBoolString(value)
+	if value == 0 then return "False" end
+	if value == 1 then return "True" end
+end
+
 script.on_internal_event(Defines.InternalEvents.PRE_CREATE_CHOICEBOX, function(event)
 	if event.eventName ~= "EMP_CONFIG" then return end
 	local choices = event:GetChoices()
@@ -250,6 +255,15 @@ script.on_internal_event(Defines.InternalEvents.PRE_CREATE_CHOICEBOX, function(e
 		elseif choice.text:GetText() == "EMP_AIMKEY" then
 			choice.text.isLiteral = true
 			choice.text.data = "Aim EMP Bind (Current Bind: " .. EMPHotkeys.getKeyName(Hyperspace.metaVariables.EMPAimEMPKey) .. ")"
+		elseif choice.text:GetText() == "EMP_MISCLICK_PREVENTION" then
+			choice.text.isLiteral = true
+			choice.text.data = "Enable/Disable Misclick Prevention (Currently Enabled: " .. convertIntToBoolString(Hyperspace.metaVariables.EMPPreventMisclicks) .. ")"
 		end
 	end
+end)
+
+script.on_internal_event(Defines.InternalEvents.PRE_CREATE_CHOICEBOX, function(event)
+	if event.eventName ~= "EMP_CHANGE_MISCLICK_PREVENTION" then return end
+	event.text.isLiteral = true
+	event.text.data = "Misclick Prevention (Currently Enabled: " .. convertIntToBoolString(Hyperspace.metaVariables.EMPPreventMisclicks) .. ")"
 end)

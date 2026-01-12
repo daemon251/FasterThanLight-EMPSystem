@@ -138,6 +138,32 @@
             </choice>
         </event>
 	</choice>
+	<choice hidden="true"> <!-- decrease charge key -->
+		<text>EMP_MISCLICK_PREVENTION</text>
+		<event name="EMP_CHANGE_MISCLICK_PREVENTION">
+            <text>EMP_MISCLICK_PREVENTION.</text>
+            <choice hidden="true">
+                <text>Enable Misclick Prevention.</text>
+                <event name="EMP_CHANGE_MISCLICK_PREVENTION_1">
+                    <metaVariable name="EMPPreventMisclicks" op="set" val="1"/>
+					<loadEvent>EMP_HOTKEY_RELOAD</loadEvent>
+                </event>
+            </choice>
+            <choice hidden="true">
+                <text>Disable Misclick Prevention.</text>
+                <event name="EMP_CHANGE_MISCLICK_PREVENTION_2">
+                    <metaVariable name="EMPPreventMisclicks" op="set" val="0"/>
+                    <loadEvent>EMP_HOTKEY_RELOAD</loadEvent>
+                </event>
+            </choice>
+            <choice hidden="true">
+                <text>Cancel.</text>
+                <event>
+                    <loadEvent>EMP_HOTKEY_RELOAD</loadEvent>
+                </event>
+            </choice>
+        </event>
+	</choice>
 	<choice hidden="true"> <!-- leave -->
 		<text>Return.</text>
 		<event/>
