@@ -14,10 +14,10 @@
 --CONFIG
 mods.EMPGenerator = {}
 
-mods.EMPGenerator.systemStats = {	[1] = {minCD = 15, maxCD = 25, minDiameter = 48, maxDiameter = 128 * 0.75},
-									[2] = {minCD = 12, maxCD = 25, minDiameter = 48, maxDiameter = 128 * 1.00},
-									[3] = {minCD = 09, maxCD = 25, minDiameter = 48, maxDiameter = 128 * 1.25},
-									[4] = {minCD = 06, maxCD = 25, minDiameter = 48, maxDiameter = 128 * 1.50}}
+mods.EMPGenerator.systemStats = {	[1] = {minCD = 15, maxCD = 25, minDiameter = 36, maxDiameter = 96 * 0.75},
+									[2] = {minCD = 12, maxCD = 25, minDiameter = 36, maxDiameter = 96 * 1.25},
+									[3] = {minCD = 09, maxCD = 25, minDiameter = 36, maxDiameter = 96 * 1.75},
+									[4] = {minCD = 06, maxCD = 25, minDiameter = 36, maxDiameter = 96 * 2.25}}
 
 --level cost determined in blueprints
 
@@ -413,7 +413,7 @@ end
 local function stunDrones(x, y, r, duration, preview)
 	local spaceManager = Hyperspace.Global.GetInstance():GetCApp().world.space
 	local droneList = spaceManager.drones --doesnt count ship drones I think
-		
+
 	local i = 0
 	while i < droneList:size() do
 		local drone = droneList[i]
@@ -472,6 +472,48 @@ local function stunDrones(x, y, r, duration, preview)
 	end
 end
 
+local function doesEnemyShipHaveFriendlyCrew()
+    local crewList1 = Hyperspace.ships.player.vCrewList 
+	local crewList2 = Hyperspace.ships.enemy.vCrewList
+
+    for i = 0, crewList1:size() - 1 do
+		local crew = crewList1[i]
+        if crew.iShipId == 1 then return true end
+    end
+
+    for i = 0, crewList2:size() - 1 do
+		local crew = crewList2[i]
+        if crew.iShipId == 1 and crew.bMindControlled == true then return true end
+    end
+
+    return false
+end
+
+local function isPlayerHackingEnemy()
+    local pShip = Hyperspace.Global.GetInstance():GetShipManager(0)
+    local hacking = pShip.hackingSystem
+    if hacking ~= nil then
+        if hacking.effectTimer.first > 0 then return true end
+    end
+    return false
+end
+
+local function isEnemyShipCloakHidden()
+    local enemyCloaked = false
+    if Hyperspace.Global.GetInstance():GetShipManager(1) ~= nil then
+        if Hyperspace.Global.GetInstance():GetShipManager(1).cloakSystem ~= nil then
+            if Hyperspace.Global.GetInstance():GetShipManager(1).cloakSystem.bTurnedOn == true then
+                enemyCloaked = true
+            end
+        end
+    end
+    if enemyCloaked == false then return false end
+    if doesEnemyShipHaveFriendlyCrew() == true then return false end
+    if isPlayerHackingEnemy() == true then return false end
+
+    return true
+end
+
 local function stunCrew(x, y, r, duration, preview)
 	local empOnLeft = false
 	if x < mods.EMPGenerator.CutoffX or InCombat == false then empOnLeft = true end
@@ -499,7 +541,9 @@ local function stunCrew(x, y, r, duration, preview)
 				local height = 13
 				local index = 1
 				if empOnLeft then index = 0 end
-				if Hyperspace.ShipGraph.GetShipInfo(index):GetRoomBlackedOut(crew.iRoomId) == false or mods.EMPGenerator.secondarySensorsActive() == true then
+
+                --check for secondary sensors
+				if (Hyperspace.ShipGraph.GetShipInfo(index):GetRoomBlackedOut(crew.iRoomId) == false or mods.EMPGenerator.secondarySensorsActive() == true) and not (isEnemyShipCloakHidden() == true and empOnLeft == false) then
 					Graphics.CSurface.GL_BlitImage(mods.EMPGenerator.DotImage, pointCursorScreen.x - width / 2, pointCursorScreen.y - height / 2, width, height, 0, Graphics.GL_Color(1, 1, 0, 1), false)
 					mods.EMPGenerator.EMPGenerator_targettingTargetCount = mods.EMPGenerator.EMPGenerator_targettingTargetCount + 1
 				end
@@ -525,7 +569,7 @@ end
 local function forceOpenDoors(x, y, r, preview)
 	local empOnLeft = false
 	if x < mods.EMPGenerator.CutoffX or InCombat == false then empOnLeft = true end
-	
+
 	local shipManager = nil
 	if empOnLeft == true then
 		shipManager = Hyperspace.Global.GetInstance():GetShipManager(0)
@@ -548,19 +592,21 @@ local function forceOpenDoors(x, y, r, preview)
 
 		if distSq < r * r then
 			if preview then
-				local pointCursorScreen = mods.EMPGenerator.convertWorldPosToScreenPos(Hyperspace.Point(x2, y2), empOnLeft)
+                if not (isEnemyShipCloakHidden() == true and empOnLeft == false) then
+                    local pointCursorScreen = mods.EMPGenerator.convertWorldPosToScreenPos(Hyperspace.Point(x2, y2), empOnLeft)
 
-				local width = 13
-				local height = 13
+                    local width = 13
+                    local height = 13
 
-				--dont exactly know why door position is 1px off... well it needs to be corrected now
-				local xOffset = 0
-				local yOffset = 0
-				if door.bVertical == true then yOffset = 1 
-				else xOffset = 1 end
+                    --dont exactly know why door position is 1px off... well it needs to be corrected now
+                    local xOffset = 0
+                    local yOffset = 0
+                    if door.bVertical == true then yOffset = 1 
+                    else xOffset = 1 end
 
-				Graphics.CSurface.GL_BlitImage(mods.EMPGenerator.DotImage, pointCursorScreen.x - width / 2 + xOffset, pointCursorScreen.y - height / 2 + yOffset, width, height, 0, Graphics.GL_Color(0, 0, 1, 1), false)
-			else
+                    Graphics.CSurface.GL_BlitImage(mods.EMPGenerator.DotImage, pointCursorScreen.x - width / 2 + xOffset, pointCursorScreen.y - height / 2 + yOffset, width, height, 0, Graphics.GL_Color(0, 0, 1, 1), false)
+                end
+            else
 				--make doors return to original state after
 				if empOnLeft == false and arrContainsElement(mods.EMPGenerator.EMPdoorList, door) == false then --the player can close their own doors!
 					mods.EMPGenerator.EMPdoorList[#mods.EMPGenerator.EMPdoorList + 1] = door
@@ -613,8 +659,86 @@ local function applyIonDamage(x, y, r, preview, ionCount)
 	end
 end
 
-local function createEMPVFX(x, y, r)
+local function createFires(shipManager, empSystem, x, y, r, preview, count)
+    local empOnLeft = false
+	if x < mods.EMPGenerator.CutoffX or InCombat == false then empOnLeft = true end
+    local roomList = nil
+    if empOnLeft == true then
+        roomList = Hyperspace.Global.GetInstance():GetShipManager(0).ship.vRoomList
+    else
+        roomList = Hyperspace.Global.GetInstance():GetShipManager(1).ship.vRoomList
+    end
+	for i = 0, roomList:size() - 1 do
+		local room = roomList[i]
+        local rw = room.rect.w
+	    local rh = room.rect.h
 
+        local x2 = room.rect.x + rw / 2
+        local y2 = room.rect.y + rh / 2
+
+        local pointCursorWorld = mods.EMPGenerator.convertScreenPosToWorldPos(Hyperspace.Point(x, y), empOnLeft)
+        
+        local distSq = (x2 - pointCursorWorld.x) * (x2 - pointCursorWorld.x) + (y2 - pointCursorWorld.y) * (y2 - pointCursorWorld.y)
+
+        if distSq < r * r then
+            if preview then
+                local pointCursorScreen = mods.EMPGenerator.convertWorldPosToScreenPos(Hyperspace.Point(x2, y2), empOnLeft)
+
+                local width = 13
+                local height = 13
+                Graphics.CSurface.GL_BlitImage(mods.EMPGenerator.DotImage, pointCursorScreen.x - width / 2, pointCursorScreen.y - height / 2, width, height, 0, Graphics.GL_Color(1, 0.5, 0, 1), false)
+            else 
+                local index = 1
+                if empOnLeft == true then
+                    index = 0
+                end
+
+                if math.random() <= 0.20 * count then
+                    Hyperspace.Global.GetInstance():GetShipManager(index):StartFire(i)
+                end
+            end
+            mods.EMPGenerator.EMPGenerator_targettingTargetCount = mods.EMPGenerator.EMPGenerator_targettingTargetCount + 1
+        end
+
+        --iterate over every tile in the room
+        --[[for j = 0, rw/35 - 1 do
+            for k = 0, rh/35 - 1 do
+                --WORLD COORDS
+                local x2 = room.rect.x + 35/2 + 35 * j
+                local y2 = room.rect.y + 35/2 + 35 * k
+
+                local pointCursorWorld = mods.EMPGenerator.convertScreenPosToWorldPos(Hyperspace.Point(x, y), empOnLeft)
+                
+                local distSq = (x2 - pointCursorWorld.x) * (x2 - pointCursorWorld.x) + (y2 - pointCursorWorld.y) * (y2 - pointCursorWorld.y)
+
+                if distSq < r * r then
+                    if preview then
+                        local pointCursorScreen = mods.EMPGenerator.convertWorldPosToScreenPos(Hyperspace.Point(x2, y2), empOnLeft)
+
+                        local width = 13
+                        local height = 13
+                        Graphics.CSurface.GL_BlitImage(mods.EMPGenerator.DotImage, pointCursorScreen.x - width / 2, pointCursorScreen.y - height / 2, width, height, 0, Graphics.GL_Color(1, 0.5, 0, 1), false)
+                    else 
+                        local index = 1
+                        if empOnLeft == true then
+                            index = 0
+                        end
+
+                        if math.random() <= 0.1 * count then
+                            Hyperspace.Global.GetInstance():GetShipManager(index):StartFire(i)
+                        end
+                    end
+                    mods.EMPGenerator.EMPGenerator_targettingTargetCount = mods.EMPGenerator.EMPGenerator_targettingTargetCount + 1
+                end
+            end
+        end--]]
+        if preview == false then
+            shipManager:StartFire(empSystem:GetRoomId())
+        end
+	end
+end
+
+local function createEMPVFX(x, y, r)
 	local onLeft = false
 	local space = 1
 	if x < mods.EMPGenerator.CutoffX then
@@ -671,6 +795,11 @@ function mods.EMPGenerator.fireEMP(x, y, r, cooldownIn, stunDuration, shipManage
 		if(shipManager:HasAugmentation("EMPGENERATOR_ION_UPGRADE")) > 0 or (shipManager:HasAugmentation("EX_EMPGENERATOR_ION_UPGRADE")) > 0 then
 			local count = shipManager:HasAugmentation("EMPGENERATOR_ION_UPGRADE") + shipManager:HasAugmentation("EX_EMPGENERATOR_ION_UPGRADE")
 			applyIonDamage(x, y, r, false, count)
+		end
+
+        if(shipManager:HasAugmentation("EMPGENERATOR_FIRE_UPGRADE")) > 0 or (shipManager:HasAugmentation("EX_EMPGENERATOR_FIRE_UPGRADE")) > 0 then
+			local count = shipManager:HasAugmentation("EMPGENERATOR_FIRE_UPGRADE") + shipManager:HasAugmentation("EX_EMPGENERATOR_FIRE_UPGRADE")
+			createFires(shipManager, empSystem, x, y, r, false, count)
 		end
 	end
 	createEMPVFX(x, y, r)
@@ -781,11 +910,14 @@ script.on_render_event(Defines.RenderEvents.MOUSE_CONTROL, function()
 			if Hyperspace.Global.GetInstance():GetShipManager(0):HasAugmentation("ZOLTAN_BYPASS") ~= 0 then canBypassSuperShields = true end
 
 			if Hyperspace.Global.GetInstance():GetShipManager(0).iShipId == space or mods.EMPGenerator.pointInSuperShield(space, mods.EMPGenerator.convertScreenPosToWorldPos(Hyperspace.Mouse.position, empOnLeft)) == false or canBypassSuperShields == true then
-				stunCrew(mousePos.x, mousePos.y, data.Diameter / 2, nil, true)
-				forceOpenDoors(mousePos.x, mousePos.y, data.Diameter / 2, true)
-				if(Hyperspace.Global.GetInstance():GetShipManager(0):HasAugmentation("EMPGENERATOR_ION_UPGRADE")) > 0 or (Hyperspace.Global.GetInstance():GetShipManager(0):HasAugmentation("EX_EMPGENERATOR_ION_UPGRADE")) > 0 then
+				if(Hyperspace.Global.GetInstance():GetShipManager(0):HasAugmentation("EMPGENERATOR_FIRE_UPGRADE")) > 0 or (Hyperspace.Global.GetInstance():GetShipManager(0):HasAugmentation("EX_EMPGENERATOR_FIRE_UPGRADE")) > 0 then
+					createFires(nil, nil, mousePos.x, mousePos.y, data.Diameter / 2, true, 1)
+				end
+                if(Hyperspace.Global.GetInstance():GetShipManager(0):HasAugmentation("EMPGENERATOR_ION_UPGRADE")) > 0 or (Hyperspace.Global.GetInstance():GetShipManager(0):HasAugmentation("EX_EMPGENERATOR_ION_UPGRADE")) > 0 then
 					applyIonDamage(mousePos.x, mousePos.y, data.Diameter / 2, true, 1)
 				end
+                forceOpenDoors(mousePos.x, mousePos.y, data.Diameter / 2, true)
+                stunCrew(mousePos.x, mousePos.y, data.Diameter / 2, nil, true) --order matters, because draw order matters
 			end
 		end
 	end
@@ -826,15 +958,15 @@ function mods.EMPGenerator.setAugmentRarity(augmentID, rarity)
 	Hyperspace.Global.GetInstance():GetBlueprints():GetAugmentBlueprint(augmentID).desc.rarity = rarity
 end
 
-mods.EMPGenerator.Cursor1Image = nil;
-mods.EMPGenerator.Cursor2Image = nil;
-mods.EMPGenerator.Grid_off_image = nil;
-mods.EMPGenerator.Grid_on_image = nil;
-mods.EMPGenerator.Grid_select_image = nil;
-mods.EMPGenerator.Grid_purple_image = nil;
-mods.EMPGenerator.Charging_off_image = nil;
-mods.EMPGenerator.Charging_on_image = nil;
-mods.EMPGenerator.Charging_select_image = nil;
+mods.EMPGenerator.Cursor1Image = nil
+mods.EMPGenerator.Cursor2Image = nil
+mods.EMPGenerator.Grid_off_image = nil
+mods.EMPGenerator.Grid_on_image = nil
+mods.EMPGenerator.Grid_select_image = nil
+mods.EMPGenerator.Grid_purple_image = nil
+mods.EMPGenerator.Charging_off_image = nil
+mods.EMPGenerator.Charging_on_image = nil
+mods.EMPGenerator.Charging_select_image = nil
 
 mods.EMPGenerator.systemOverlay = nil
 
@@ -866,15 +998,18 @@ local function OnInitLogic()
 		mods.EMPGenerator.CutoffXNormal = 873
 		mods.EMPGenerator.CutoffXBoss = 747
 		mods.EMPGenerator.setAugmentRarity("EMPGENERATOR_ION_UPGRADE", 0) --becomes internal upgrade, dont make it spawn in stores
+        mods.EMPGenerator.setAugmentRarity("EMPGENERATOR_FIRE_UPGRADE", 0) --becomes internal upgrade, dont make it spawn in stores
 
 	elseif mods.vertexutil ~= nil then --ins probably
 		mods.EMPGenerator.CutoffXNormal = 873
 		mods.EMPGenerator.CutoffXBoss = 747
 		mods.EMPGenerator.setAugmentRarity("EMPGENERATOR_ION_UPGRADE", 3) 
+        mods.EMPGenerator.setAugmentRarity("EMPGENERATOR_FIRE_UPGRADE", 4)
 	else --vanilla nd shiz
 		mods.EMPGenerator.CutoffXNormal = 882 --VANILLA setting
 		mods.EMPGenerator.CutoffXBoss = 756 --VANILLA setting
 		mods.EMPGenerator.setAugmentRarity("EMPGENERATOR_ION_UPGRADE", 3) 
+        mods.EMPGenerator.setAugmentRarity("EMPGENERATOR_FIRE_UPGRADE", 4)
 	end
 
 	if Hyperspace.metaVariables.playerEMPHackFiredOnce == 1 then mods.EMPGenerator.playerEMPHackFiredOnce = true end
@@ -987,6 +1122,12 @@ local function multiverseShipPatch()
 		--replace it with the external version
 		Hyperspace.Global.GetInstance():GetShipManager(0):AddAugmentation("EX_EMPGENERATOR_ION_UPGRADE")
 		Hyperspace.Global.GetInstance():GetShipManager(0):RemoveAugmentation("EMPGENERATOR_ION_UPGRADE")
+	end
+
+    if(Hyperspace.Global.GetInstance():GetShipManager(0):HasAugmentation("EMPGENERATOR_FIRE_UPGRADE")) > 0 then
+		--replace it with the external version
+		Hyperspace.Global.GetInstance():GetShipManager(0):AddAugmentation("EX_EMPGENERATOR_FIRE_UPGRADE")
+		Hyperspace.Global.GetInstance():GetShipManager(0):RemoveAugmentation("EMPGENERATOR_FIRE_UPGRADE")
 	end
 
     if mods.multiverse.systemIcons[Hyperspace.ShipSystem.NameToSystemId("empgenerator")] == nil then
