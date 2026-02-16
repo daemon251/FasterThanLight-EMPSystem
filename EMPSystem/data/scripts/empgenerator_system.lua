@@ -18,6 +18,7 @@ mods.EMPGenerator.systemStats = {	[1] = {minCD = 15, maxCD = 25, minDiameter = 3
 									[2] = {minCD = 12, maxCD = 25, minDiameter = 36, maxDiameter = 96 * 1.25},
 									[3] = {minCD = 09, maxCD = 25, minDiameter = 36, maxDiameter = 96 * 1.75},
 									[4] = {minCD = 06, maxCD = 25, minDiameter = 36, maxDiameter = 96 * 2.25}}
+mods.EMPGenerator.playerCannotTargetCloak = true
 
 --level cost determined in blueprints
 
@@ -498,16 +499,20 @@ local function isPlayerHackingEnemy()
     return false
 end
 
-local function isEnemyShipCloakHidden()
+local function isTargetCloaking(target)
     local enemyCloaked = false
-    if Hyperspace.Global.GetInstance():GetShipManager(1) ~= nil then
-        if Hyperspace.Global.GetInstance():GetShipManager(1).cloakSystem ~= nil then
-            if Hyperspace.Global.GetInstance():GetShipManager(1).cloakSystem.bTurnedOn == true then
+    if Hyperspace.Global.GetInstance():GetShipManager(target) ~= nil then
+        if Hyperspace.Global.GetInstance():GetShipManager(target).cloakSystem ~= nil then
+            if Hyperspace.Global.GetInstance():GetShipManager(target).cloakSystem.bTurnedOn == true then
                 enemyCloaked = true
             end
         end
     end
-    if enemyCloaked == false then return false end
+    return enemyCloaked
+end
+
+local function isEnemyShipCloakHidden()
+    if isTargetCloaking(1) == false then return false end
     if doesEnemyShipHaveFriendlyCrew() == true then return false end
     --if isPlayerHackingEnemy() == true then return false end
 
@@ -534,7 +539,7 @@ local function stunCrew(x, y, r, duration, preview)
 		
 		local distSq = (x2 - pointCursorWorld.x) * (x2 - pointCursorWorld.x) + (y2 - pointCursorWorld.y) * (y2 - pointCursorWorld.y)
 
-		if distSq < r * r then 
+		if distSq < r * r and (isTargetCloaking(1) == false or mods.EMPGenerator.playerCannotTargetCloak == false) then 
 			if preview then
 				local pointCursorScreen = mods.EMPGenerator.convertWorldPosToScreenPos(Hyperspace.Point(x2, y2), empOnLeft)
 				local width = 13
@@ -590,7 +595,7 @@ local function forceOpenDoors(x, y, r, preview)
 		
 		local distSq = (x2 - pointCursorWorld.x) * (x2 - pointCursorWorld.x) + (y2 - pointCursorWorld.y) * (y2 - pointCursorWorld.y)
 
-		if distSq < r * r then
+		if distSq < r * r and (isTargetCloaking(1) == false or mods.EMPGenerator.playerCannotTargetCloak == false) then
 			if preview then
                 if not (isEnemyShipCloakHidden() == true and empOnLeft == false) then
                     local pointCursorScreen = mods.EMPGenerator.convertWorldPosToScreenPos(Hyperspace.Point(x2, y2), empOnLeft)
