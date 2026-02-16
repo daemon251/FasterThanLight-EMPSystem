@@ -509,7 +509,7 @@ local function isEnemyShipCloakHidden()
     end
     if enemyCloaked == false then return false end
     if doesEnemyShipHaveFriendlyCrew() == true then return false end
-    if isPlayerHackingEnemy() == true then return false end
+    --if isPlayerHackingEnemy() == true then return false end
 
     return true
 end
